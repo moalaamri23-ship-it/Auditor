@@ -27,12 +27,16 @@ export async function initDuckDB(): Promise<void> {
   if (_initPromise) return _initPromise;   // init in progress
 
   _initPromise = (async () => {
-    // Pin to MVP bundle — no SharedArrayBuffer, no COOP/COEP headers needed.
-    // Use a Blob worker (per official docs) so the Worker is same-origin
-    // even though the script URL comes from jsDelivr CDN.
     const { mvp } = duckdb.getJsDelivrBundles();
+
+    // Pre-fetch the worker script in the main thread so the Blob worker
+    // runs entirely same-origin with no cross-origin importScripts call.
+    const workerScript = await fetch(mvp.mainWorker!).then(r => {
+      if (!r.ok) throw new Error(`Failed to fetch DuckDB worker: ${r.status}`);
+      return r.text();
+    });
     const workerUrl = URL.createObjectURL(
-      new Blob([`importScripts("${mvp.mainWorker!}");`], { type: 'text/javascript' })
+      new Blob([workerScript], { type: 'text/javascript' })
     );
     const worker = new Worker(workerUrl);
     URL.revokeObjectURL(workerUrl);
