@@ -377,7 +377,7 @@ export async function query(sql: string): Promise<Record<string, unknown>[]> {
 // Filter options — distinct values for each filterable column
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { FilterOptions, AnalysisFilters } from '../types';
+import type { FilterOptions, AnalysisFilters, AIFlag } from '../types';
 
 export async function getFilterOptions(columnMap: ColumnMap): Promise<FilterOptions> {
   const distinct = async (col: string): Promise<string[]> => {
@@ -465,4 +465,59 @@ export async function createAnalysisScopeView(
 
   const [row] = await _q('SELECT COUNT(*) AS cnt FROM v_analysis_scope');
   return Number(row?.cnt ?? 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI flags table — per-record flags written during AI text analysis
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Create (or recreate) the ai_flags table */
+export async function createAIFlagsTable(): Promise<void> {
+  if (!_conn) throw new Error('DuckDB is not initialised.');
+  await _conn.query(`
+    CREATE OR REPLACE TABLE ai_flags (
+      wo_number       VARCHAR,
+      category        VARCHAR,
+      severity        VARCHAR,
+      comment         VARCHAR,
+      description     VARCHAR,
+      equipment       VARCHAR
+    )
+  `);
+}
+
+/** Insert a batch of flags into the ai_flags table */
+export async function insertAIFlagsBatch(flags: AIFlag[]): Promise<void> {
+  if (!_conn || flags.length === 0) return;
+  const rows = flags.map(f =>
+    `('${esc(f.woNumber)}','${esc(f.category)}','${esc(f.severity)}','${esc(f.comment)}','${esc(f.description ?? '')}','${esc(f.equipment ?? '')}')`
+  ).join(',\n');
+  await _conn.query(`
+    INSERT INTO ai_flags (wo_number, category, severity, comment, description, equipment)
+    VALUES ${rows}
+  `);
+}
+
+/** Restore ai_flags table from persisted session data (called after re-upload) */
+export async function restoreAIFlagsFromSession(flags: AIFlag[]): Promise<void> {
+  await createAIFlagsTable();
+  if (flags.length > 0) await insertAIFlagsBatch(flags);
+}
+
+/** Fetch AI-flagged WOs for a given category from DuckDB */
+export async function queryAIFlags(category?: string): Promise<AIFlag[]> {
+  const where = category ? `WHERE category = '${esc(category)}'` : '';
+  const rows = await _q(`SELECT * FROM ai_flags ${where} ORDER BY severity DESC, wo_number`);
+  return rows.map(r => ({
+    woNumber:    String(r.wo_number   ?? ''),
+    category:    String(r.category    ?? '') as AIFlag['category'],
+    severity:    String(r.severity    ?? '') as AIFlag['severity'],
+    comment:     String(r.comment     ?? ''),
+    description: String(r.description ?? ''),
+    equipment:   String(r.equipment   ?? ''),
+  }));
+}
+
+function esc(s: string): string {
+  return s.replace(/'/g, "''");
 }

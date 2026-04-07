@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import Icon from './Icon';
 import { useStore, useActiveSession } from '../store/useStore';
 import { ParsedDataCache } from '../services/ParsedDataCache';
-import { loadData, runProfiling } from '../services/DuckDBService';
+import { loadData, runProfiling, restoreAIFlagsFromSession } from '../services/DuckDBService';
 import type { CanonicalColumn, ColumnMap } from '../types';
 import {
   COLUMN_LABELS,
@@ -69,6 +69,12 @@ export default function SchemaMapper() {
 
       // Load into DuckDB
       await loadData(cachedData.rows, localMap);
+
+      // Restore AI flags table if this session has previously computed flags
+      if (session.aiFlags?.length > 0) {
+        await restoreAIFlagsFromSession(session.aiFlags).catch(() => {});
+      }
+
       setLoadStage('profiling');
 
       // Run profiling

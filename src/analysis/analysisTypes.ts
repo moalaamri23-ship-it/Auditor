@@ -64,6 +64,8 @@ export interface AnalysisResults {
   scopeWOCount:   number;      // WOs in scope after filters
   filters:        import('../types').AnalysisFilters;
   computedAt:     string;      // ISO
+  // AI text analysis — present only when AI config was provided
+  aiFlagSummary?: import('../types').AIFlagSummary;
 }
 
 // ─── Maturity pillar weights ──────────────────────────────────────────────────

@@ -5,14 +5,14 @@ import FilterPanel from './FilterPanel';
 import AnalysisView from './AnalysisView';
 import { useActiveSession, useStore } from '../store/useStore';
 import { runAllModules } from '../analysis/AnalysisEngine';
-import { getFilterOptions } from '../services/DuckDBService';
+import { getFilterOptions, queryAIFlags } from '../services/DuckDBService';
 import type { ModuleResult, AnalysisResults, ModuleStatus } from '../analysis/analysisTypes';
-import type { AnalysisFilters, FilterOptions } from '../types';
+import type { AnalysisFilters, FilterOptions, AIFlagSummary, FlagCategory } from '../types';
 import { EMPTY_FILTERS } from '../types';
 
 export default function AuditDashboard() {
   const session  = useActiveSession();
-  const { setScreen, updateSession } = useStore();
+  const { setScreen, updateSession, aiConfig } = useStore();
   const [filters,       setFilters]       = useState<AnalysisFilters>(session?.analysisFilters ?? EMPTY_FILTERS);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
   const [isRerunning,   setIsRerunning]   = useState(false);
@@ -35,13 +35,28 @@ export default function AuditDashboard() {
     if (!session) return;
     setIsRerunning(true);
     try {
-      const results = await runAllModules(session.id, session.columnMap, filters);
-      updateSession(session.id, {
+      const hasAI = !!aiConfig?.apiKey?.trim();
+      const results = await runAllModules({
+        sessionId:  session.id,
+        columnMap:  session.columnMap,
+        filters,
+        aiConfig:   hasAI ? aiConfig : undefined,
+      });
+
+      const sessionUpdates: Parameters<typeof updateSession>[1] = {
         analysisResults: results,
         analysisFilters: filters,
-        maturityScore: results.maturityScore,
-        lastAnalysedAt: new Date().toISOString(),
-      });
+        maturityScore:   results.maturityScore,
+        aiFlagSummary:   results.aiFlagSummary ?? null,
+        lastAnalysedAt:  new Date().toISOString(),
+      };
+
+      if (results.aiFlagSummary) {
+        const flags = await queryAIFlags();
+        sessionUpdates.aiFlags = flags;
+      }
+
+      updateSession(session.id, sessionUpdates);
     } finally {
       setIsRerunning(false);
     }
@@ -84,8 +99,9 @@ export default function AuditDashboard() {
     );
   }
 
-  const results = session.analysisResults;
-  const totalWOs = session.dataProfile?.distinctWOs ?? results.scopeWOCount;
+  const results   = session.analysisResults;
+  const totalWOs  = session.dataProfile?.distinctWOs ?? results.scopeWOCount;
+  const flagSummary = session.aiFlagSummary ?? results.aiFlagSummary ?? null;
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
@@ -193,6 +209,21 @@ export default function AuditDashboard() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* ── AI flag summary ── */}
+      {flagSummary && <AIFlagSummaryCard summary={flagSummary} onViewAll={() => setShowModules(true)} />}
+      {!flagSummary && !aiConfig?.apiKey && (
+        <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded text-sm text-slate-500 animate-enter">
+          <Icon name="wand" className="w-5 h-5 text-slate-300" />
+          <span>
+            AI text analysis was not run (no API key). Configure AI in{' '}
+            <button onClick={() => setScreen('settings')} className="font-bold text-brand-600 hover:underline">
+              Settings
+            </button>{' '}
+            then re-run analysis to get per-record flags.
+          </span>
+        </div>
+      )}
 
       {/* ── Top anomalies ── */}
       <TopAnomaliesCard results={results} onViewAll={() => setScreen('explorer')} />
@@ -342,6 +373,68 @@ function DataContextStrip({ results }: { results: AnalysisResults }) {
       <span><span className="text-slate-400">WOs analysed:</span> <span className="text-white">{results.scopeWOCount.toLocaleString()}</span></span>
       <span><span className="text-slate-400">filters:</span> <span className={activeFilters.length > 0 ? 'text-amber-400' : 'text-slate-300'}>{activeFilters.length > 0 ? activeFilters.join(', ') : 'none'}</span></span>
       <span><span className="text-slate-400">sent to AI:</span> <span className="text-slate-300">no</span></span>
+    </div>
+  );
+}
+
+// ─── AI Flag Summary Card ─────────────────────────────────────────────────────
+
+const FLAG_CATEGORY_META: Record<FlagCategory, { label: string; description: string; color: string }> = {
+  desc_code_alignment:    { label: 'Code Alignment',      description: 'Description vs reliability/failure codes',  color: 'text-red-600 bg-red-50 border-red-200'     },
+  confirmation_relevance: { label: 'Confirmation Relevance', description: 'Confirmation unrelated to work described', color: 'text-orange-600 bg-orange-50 border-orange-200' },
+  confirmation_quality:   { label: 'Confirmation Quality',   description: 'Too vague, generic, or copy-pasted',       color: 'text-amber-600 bg-amber-50 border-amber-200'   },
+  code_completeness:      { label: 'Code Completeness',     description: 'Missing codes implied by description',      color: 'text-blue-600 bg-blue-50 border-blue-200'      },
+  generic_description:    { label: 'Generic Description',   description: 'WO description too vague to be useful',    color: 'text-slate-600 bg-slate-50 border-slate-200'   },
+};
+
+function AIFlagSummaryCard({ summary, onViewAll }: { summary: AIFlagSummary; onViewAll: () => void }) {
+  const categories = Object.entries(summary.byCategory) as [FlagCategory, number][];
+  const pct = summary.scopeWOCount > 0
+    ? Math.round((summary.totalFlagged / summary.scopeWOCount) * 100)
+    : 0;
+
+  return (
+    <div className="bg-white rounded shadow border border-slate-200 overflow-hidden animate-enter">
+      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="font-bold text-slate-700 flex items-center gap-2 text-sm">
+          <Icon name="wand" className="w-4 h-4 text-brand-500" />
+          AI Text Analysis Flags
+        </div>
+        <button
+          onClick={onViewAll}
+          className="text-xs font-bold text-brand-600 hover:text-brand-700"
+        >
+          View per-WO detail →
+        </button>
+      </div>
+
+      {/* Summary strip */}
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-6 text-sm">
+        <div>
+          <span className="text-2xl font-bold font-mono text-slate-900">{summary.totalFlagged.toLocaleString()}</span>
+          <span className="text-xs text-slate-500 ml-1.5">WOs flagged</span>
+          <span className="text-xs text-slate-400 ml-1">({pct}% of scope)</span>
+        </div>
+        <div className="text-xs text-slate-400">
+          {summary.totalFlags.toLocaleString()} total flags · analysed {summary.scopeWOCount.toLocaleString()} WOs
+        </div>
+      </div>
+
+      {/* Category breakdown */}
+      <div className="grid sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+        {categories.map(([cat, count]) => {
+          const meta = FLAG_CATEGORY_META[cat];
+          return (
+            <div key={cat} className="px-4 py-3">
+              <div className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border mb-2 ${meta.color}`}>
+                {meta.label}
+              </div>
+              <div className="text-xl font-bold font-mono text-slate-900">{count.toLocaleString()}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{meta.description}</div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

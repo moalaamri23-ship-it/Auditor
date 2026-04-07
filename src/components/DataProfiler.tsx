@@ -1,19 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Icon from './Icon';
 import FilterPanel from './FilterPanel';
 import { useActiveSession, useStore } from '../store/useStore';
 import { runAllModules } from '../analysis/AnalysisEngine';
-import { getFilterOptions } from '../services/DuckDBService';
+import { getFilterOptions, queryAIFlags } from '../services/DuckDBService';
 import type { DataProfile, ColumnProfile, GranularityLevel, ValidationReport, AnalysisFilters, FilterOptions } from '../types';
 import { EMPTY_FILTERS } from '../types';
 
 export default function DataProfiler() {
   const session = useActiveSession();
-  const { setScreen, updateSession } = useStore();
+  const { setScreen, updateSession, aiConfig } = useStore();
   const [isAnalysing, setIsAnalysing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [filters, setFilters]         = useState<AnalysisFilters>(session?.analysisFilters ?? EMPTY_FILTERS);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
+  const [aiPhase, setAIPhase]         = useState(false);
+  const [aiProgress, setAIProgress]   = useState({ done: 0, total: 0 });
+  const cancelRef = useRef({ current: false });
 
   // Load filter options once DuckDB data is ready
   useEffect(() => {
@@ -24,16 +27,43 @@ export default function DataProfiler() {
   const handleRunAnalysis = async () => {
     if (!session) return;
     setIsAnalysing(true);
+    setAIPhase(false);
+    setAIProgress({ done: 0, total: 0 });
     setAnalysisError(null);
+    cancelRef.current = { current: false };
+
+    const hasAI = !!aiConfig?.apiKey?.trim();
+
     try {
-      const results = await runAllModules(session.id, session.columnMap, filters);
-      updateSession(session.id, {
+      const results = await runAllModules({
+        sessionId:  session.id,
+        columnMap:  session.columnMap,
+        filters,
+        aiConfig:   hasAI ? aiConfig : undefined,
+        onAIProgress: (done, total) => {
+          setAIPhase(true);
+          setAIProgress({ done, total });
+        },
+        cancelRef: cancelRef.current,
+      });
+
+      // Store flags in session for persistence across page refreshes
+      const sessionUpdates: Parameters<typeof updateSession>[1] = {
         analysisResults: results,
         analysisFilters: filters,
-        maturityScore: results.maturityScore,
-        stage: 'analysed',
-        lastAnalysedAt: new Date().toISOString(),
-      });
+        maturityScore:   results.maturityScore,
+        aiFlagSummary:   results.aiFlagSummary ?? null,
+        stage:           'analysed',
+        lastAnalysedAt:  new Date().toISOString(),
+      };
+
+      // Fetch flags from DuckDB and persist in localStorage
+      if (results.aiFlagSummary) {
+        const flags = await queryAIFlags();
+        sessionUpdates.aiFlags = flags;
+      }
+
+      updateSession(session.id, sessionUpdates);
       setScreen('analysis');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -41,7 +71,12 @@ export default function DataProfiler() {
       console.error('[Analysis] runAllModules failed:', err);
     } finally {
       setIsAnalysing(false);
+      setAIPhase(false);
     }
+  };
+
+  const handleCancel = () => {
+    if (cancelRef.current) cancelRef.current.current = true;
   };
 
   if (!session) {
@@ -128,31 +163,80 @@ export default function DataProfiler() {
       )}
 
       {/* ── Proceed to analysis ── */}
-      <div className="flex gap-3 pt-2">
-        <button
-          onClick={() => setScreen('schema-mapper')}
-          className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-slate-50 transition text-sm"
-        >
-          <Icon name="gear" className="w-4 h-4" />
-          Re-map Columns
-        </button>
-        <button
-          onClick={handleRunAnalysis}
-          disabled={isAnalysing || !session?.hasDataInDuckDB}
-          className="bg-gradient-to-r from-brand-600 to-indigo-600 text-white px-6 py-2 rounded font-bold flex items-center gap-2 text-sm shadow hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isAnalysing ? (
-            <>
-              <Icon name="loader" className="w-4 h-4 animate-spin" />
-              Running Analysis…
-            </>
-          ) : (
-            <>
-              <Icon name="bolt" className="w-4 h-4" />
-              Run Analysis
-            </>
+      <div className="space-y-3 pt-2">
+        <div className="flex gap-3">
+          <button
+            onClick={() => setScreen('schema-mapper')}
+            disabled={isAnalysing}
+            className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-slate-50 transition text-sm disabled:opacity-40"
+          >
+            <Icon name="gear" className="w-4 h-4" />
+            Re-map Columns
+          </button>
+          <button
+            onClick={handleRunAnalysis}
+            disabled={isAnalysing || !session?.hasDataInDuckDB}
+            className="bg-gradient-to-r from-brand-600 to-indigo-600 text-white px-6 py-2 rounded font-bold flex items-center gap-2 text-sm shadow hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isAnalysing && !aiPhase ? (
+              <>
+                <Icon name="loader" className="w-4 h-4 animate-spin" />
+                Running Analysis…
+              </>
+            ) : isAnalysing && aiPhase ? (
+              <>
+                <Icon name="loader" className="w-4 h-4 animate-spin" />
+                AI Analysing…
+              </>
+            ) : (
+              <>
+                <Icon name="bolt" className="w-4 h-4" />
+                Run Analysis
+                {aiConfig?.apiKey && <span className="text-[10px] font-mono opacity-70 ml-1">+ AI</span>}
+              </>
+            )}
+          </button>
+          {isAnalysing && aiPhase && (
+            <button
+              onClick={handleCancel}
+              className="bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded font-bold text-sm hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition"
+            >
+              Cancel AI
+            </button>
           )}
-        </button>
+        </div>
+
+        {/* AI progress bar */}
+        {isAnalysing && aiPhase && aiProgress.total > 0 && (
+          <div className="bg-white border border-slate-200 rounded p-3 animate-enter">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                <Icon name="wand" className="w-3.5 h-3.5 text-brand-500" />
+                AI Text Analysis
+              </div>
+              <div className="text-xs font-mono text-slate-400">
+                {aiProgress.done.toLocaleString()} / {aiProgress.total.toLocaleString()} WOs
+              </div>
+            </div>
+            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-brand-500 to-indigo-500 rounded-full transition-all duration-300"
+                style={{ width: `${Math.round((aiProgress.done / aiProgress.total) * 100)}%` }}
+              />
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1">
+              Analysing alignment between descriptions, reliability codes, and confirmation texts…
+            </div>
+          </div>
+        )}
+
+        {!aiConfig?.apiKey && (
+          <div className="text-xs text-amber-600 flex items-center gap-1.5">
+            <Icon name="alertTriangle" className="w-3.5 h-3.5" />
+            No AI key configured — analysis will run DuckDB modules only.
+            <button onClick={() => setScreen('settings')} className="font-bold underline">Configure in Settings →</button>
+          </div>
+        )}
       </div>
     </div>
   );

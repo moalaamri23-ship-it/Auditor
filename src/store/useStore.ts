@@ -39,6 +39,8 @@ export const useStore = create<AppState>()(
           dataProfile: null,
           analysisResults: null,
           aiInsights: null,
+          aiFlags: [],
+          aiFlagSummary: null,
           maturityScore: null,
           stage: 'uploaded',
           hasDataInDuckDB: false,
@@ -102,9 +104,15 @@ export const useActiveSession = () => {
   const sessions = useStore((s) => s.sessions);
   const activeSessionId = useStore((s) => s.activeSessionId);
   const session = sessions.find((s) => s.id === activeSessionId) ?? null;
-  // Migration guard: sessions persisted before filters were added won't have analysisFilters
+  // Migration guards for sessions persisted before new fields were added
   if (session && !session.analysisFilters) {
     (session as any).analysisFilters = EMPTY_FILTERS;
+  }
+  if (session && !session.aiFlags) {
+    (session as any).aiFlags = [];
+  }
+  if (session && session.aiFlagSummary === undefined) {
+    (session as any).aiFlagSummary = null;
   }
   return session;
 };

@@ -172,6 +172,8 @@ export interface Session {
   dataProfile: DataProfile | null;
   analysisResults: import('./analysis/analysisTypes').AnalysisResults | null;
   aiInsights: AIInsights | null;
+  aiFlags: AIFlag[];           // per-record AI flags (persisted in localStorage)
+  aiFlagSummary: AIFlagSummary | null;
   maturityScore: number | null; // 0–100 composite
   stage: SessionStage;
   hasDataInDuckDB: boolean;    // false after page refresh (DuckDB is in-memory)
@@ -197,6 +199,35 @@ export interface AIFinding {
   recommendedAction: string;
   insufficientData: boolean;
   generatedAt: string; // ISO
+}
+
+// ─────────────────────────────────────────────
+// AI PER-RECORD FLAGS
+// ─────────────────────────────────────────────
+
+export type FlagCategory =
+  | 'desc_code_alignment'   // WO description vs reliability/failure codes
+  | 'confirmation_relevance' // Confirmation text unrelated to the work
+  | 'confirmation_quality'  // Confirmation too vague/generic/copy-pasted
+  | 'code_completeness'     // Missing codes implied by description
+  | 'generic_description';  // WO description too generic to be useful
+
+export interface AIFlag {
+  woNumber:    string;
+  category:    FlagCategory;
+  severity:    'HIGH' | 'MEDIUM' | 'LOW';
+  comment:     string;   // AI's specific explanation (max ~120 chars)
+  // Denormalised for display without a DuckDB round-trip
+  description?: string; // WO description snapshot
+  equipment?:   string; // Equipment snapshot
+}
+
+export interface AIFlagSummary {
+  totalFlagged:   number;   // distinct WOs with at least one flag
+  totalFlags:     number;   // total flag entries
+  byCategory:     Record<FlagCategory, number>;
+  generatedAt:    string;   // ISO — when the run completed
+  scopeWOCount:   number;   // WOs in scope when flags were generated
 }
 
 // ─────────────────────────────────────────────

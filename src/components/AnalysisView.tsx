@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, Line, Legend,
@@ -6,13 +6,15 @@ import {
 import Icon from './Icon';
 import { useActiveSession } from '../store/useStore';
 import type { ModuleResult, Anomaly, ModuleStatus } from '../analysis/analysisTypes';
+import type { AIFlag, FlagCategory } from '../types';
 
-type ModuleId = 'data-integrity' | 'reliability' | 'process';
+type ModuleId = 'data-integrity' | 'reliability' | 'process' | 'ai-flags';
 
 const MODULE_NAV: { id: ModuleId; label: string; icon: React.ComponentProps<typeof Icon>['name'] }[] = [
   { id: 'data-integrity', label: 'Data Integrity',      icon: 'shield'   },
   { id: 'reliability',    label: 'Reliability Analysis', icon: 'activity' },
   { id: 'process',        label: 'Process Compliance',   icon: 'clock'    },
+  { id: 'ai-flags',       label: 'AI Text Flags',        icon: 'wand'     },
 ];
 
 export default function AnalysisView() {
@@ -27,8 +29,10 @@ export default function AnalysisView() {
     );
   }
 
-  const results   = session.analysisResults;
+  const results      = session.analysisResults;
   const moduleResult = results.modules.find(m => m.moduleId === activeModule);
+  const flagSummary  = session.aiFlagSummary ?? results.aiFlagSummary ?? null;
+  const aiFlags      = session.aiFlags ?? [];
 
   return (
     <div className="flex h-full">
@@ -42,6 +46,11 @@ export default function AnalysisView() {
           {MODULE_NAV.map(nav => {
             const mod = results.modules.find(m => m.moduleId === nav.id);
             const active = activeModule === nav.id;
+
+            // For ai-flags: show total flag count as badge
+            const isAIFlags = nav.id === 'ai-flags';
+            const flagCount = isAIFlags ? (flagSummary?.totalFlags ?? null) : null;
+
             return (
               <button
                 key={nav.id}
@@ -52,7 +61,7 @@ export default function AnalysisView() {
                     : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                <Icon name={nav.icon} className="w-4 h-4 shrink-0" />
+                <Icon name={nav.icon} className={`w-4 h-4 shrink-0 ${active && isAIFlags ? 'text-brand-600' : isAIFlags ? 'text-brand-400' : ''}`} />
                 <div className="flex-1 min-w-0">
                   <div className={`text-xs font-bold truncate ${active ? 'text-brand-700' : ''}`}>
                     {nav.label}
@@ -61,6 +70,12 @@ export default function AnalysisView() {
                     <div className={`text-[10px] font-mono ${statusColor(mod.status)}`}>
                       {mod.score}/100
                     </div>
+                  )}
+                  {isAIFlags && flagCount != null && (
+                    <div className="text-[10px] font-mono text-brand-500">{flagCount} flags</div>
+                  )}
+                  {isAIFlags && flagCount == null && (
+                    <div className="text-[10px] text-slate-400">no AI run</div>
                   )}
                 </div>
                 {mod && <StatusDot status={mod.status} />}
@@ -81,12 +96,142 @@ export default function AnalysisView() {
 
       {/* ── Module content ── */}
       <main className="flex-1 overflow-auto scroll-thin p-6">
-        {moduleResult ? (
+        {activeModule === 'ai-flags' ? (
+          <AIFlagsPanel flags={aiFlags} summary={flagSummary} />
+        ) : moduleResult ? (
           <ModulePanel module={moduleResult} />
         ) : (
           <div className="text-slate-400 text-sm">Module not found.</div>
         )}
       </main>
+    </div>
+  );
+}
+
+// ─── AI Flags Panel ───────────────────────────────────────────────────────────
+
+const FLAG_CATEGORY_META: Record<FlagCategory, { label: string; description: string }> = {
+  desc_code_alignment:    { label: 'Code Alignment',        description: 'WO description inconsistent with assigned reliability/failure codes' },
+  confirmation_relevance: { label: 'Confirmation Relevance', description: 'Confirmation text does not relate to the work described in the WO'    },
+  confirmation_quality:   { label: 'Confirmation Quality',   description: 'Confirmation is too vague, generic, or appears copy-pasted'           },
+  code_completeness:      { label: 'Code Completeness',      description: 'Reliability/failure codes missing when description clearly implies them'},
+  generic_description:    { label: 'Generic Description',    description: 'WO description too generic to carry diagnostic or audit value'        },
+};
+
+const FLAG_CATEGORIES = Object.keys(FLAG_CATEGORY_META) as FlagCategory[];
+
+import type { AIFlagSummary } from '../types';
+
+function AIFlagsPanel({ flags, summary }: { flags: AIFlag[]; summary: AIFlagSummary | null | undefined }) {
+  const [activeCategory, setActiveCategory] = useState<FlagCategory | 'all'>('all');
+  const [severityFilter, setSeverityFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
+
+  if (!summary) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-400 animate-enter">
+        <Icon name="wand" className="w-10 h-10" />
+        <div className="text-sm text-center">
+          AI text analysis has not been run yet.
+          <br />Configure your AI key in <strong className="text-slate-600">Settings</strong> and re-run analysis.
+        </div>
+      </div>
+    );
+  }
+
+  const filtered = flags.filter(f => {
+    if (activeCategory !== 'all' && f.category !== activeCategory) return false;
+    if (severityFilter !== 'ALL' && f.severity !== severityFilter) return false;
+    return true;
+  });
+
+  return (
+    <div className="space-y-6 animate-enter">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-slate-900">AI Text Flags</h2>
+        <p className="text-sm text-slate-500 mt-0.5">
+          {summary.totalFlagged.toLocaleString()} WOs flagged · {summary.totalFlags.toLocaleString()} total flags · {summary.scopeWOCount.toLocaleString()} WOs analysed
+        </p>
+      </div>
+
+      {/* Category tabs */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setActiveCategory('all')}
+          className={`px-3 py-1.5 rounded text-xs font-bold border transition ${activeCategory === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+        >
+          All ({flags.length})
+        </button>
+        {FLAG_CATEGORIES.map(cat => {
+          const count = summary.byCategory[cat] ?? 0;
+          const active = activeCategory === cat;
+          return (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3 py-1.5 rounded text-xs font-bold border transition ${active ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            >
+              {FLAG_CATEGORY_META[cat].label} ({count})
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Category description */}
+      {activeCategory !== 'all' && (
+        <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded px-3 py-2">
+          {FLAG_CATEGORY_META[activeCategory].description}
+        </div>
+      )}
+
+      {/* Severity filter */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-bold text-slate-400 uppercase">Severity:</span>
+        {(['ALL', 'HIGH', 'MEDIUM', 'LOW'] as const).map(s => (
+          <button
+            key={s}
+            onClick={() => setSeverityFilter(s)}
+            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${severityFilter === s ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
+          >
+            {s}
+          </button>
+        ))}
+        <span className="text-xs text-slate-400 ml-2">{filtered.length} records</span>
+      </div>
+
+      {/* Flag list */}
+      {filtered.length === 0 ? (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex gap-3">
+          <Icon name="checkCircle" className="w-5 h-5 text-green-500 shrink-0" />
+          <div className="text-sm text-green-700">No flags match the current filter.</div>
+        </div>
+      ) : (
+        <div className="bg-white rounded shadow border border-slate-200 overflow-hidden">
+          <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase text-slate-400">
+            {filtered.length} flagged work orders
+          </div>
+          <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto scroll-thin">
+            {filtered.map((f, i) => (
+              <div key={i} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50">
+                <SeverityBadge severity={f.severity} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold font-mono text-slate-800">{f.woNumber}</span>
+                    {f.equipment && <span className="text-xs text-slate-400">{f.equipment}</span>}
+                    <span className="text-[10px] font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-200">
+                      {FLAG_CATEGORY_META[f.category]?.label ?? f.category}
+                    </span>
+                  </div>
+                  {f.description && (
+                    <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{f.description}</div>
+                  )}
+                  <div className="text-xs text-slate-700 mt-1 italic">"{f.comment}"</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
