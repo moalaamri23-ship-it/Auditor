@@ -1,8 +1,4 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
-import duckdb_wasm_mvp    from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
-import duckdb_worker_mvp  from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
-import duckdb_wasm_eh     from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
-import duckdb_worker_eh   from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import type {
   ColumnMap,
   DataProfile,
@@ -26,27 +22,26 @@ let _db:   duckdb.AsyncDuckDB | null = null;
 let _conn: duckdb.AsyncDuckDBConnection | null = null;
 let _initPromise: Promise<void> | null = null;
 
-// Local bundles served by Vite — no CDN dependency, no network hang
-const LOCAL_BUNDLES: duckdb.DuckDBBundles = {
-  mvp: { mainModule: duckdb_wasm_mvp, mainWorker: duckdb_worker_mvp },
-  eh:  { mainModule: duckdb_wasm_eh,  mainWorker: duckdb_worker_eh  },
-};
-
 export async function initDuckDB(): Promise<void> {
   if (_conn) return;                       // already ready
   if (_initPromise) return _initPromise;   // init in progress
 
   _initPromise = (async () => {
-    const bundle = await duckdb.selectBundle(LOCAL_BUNDLES);
-    const worker = new Worker(bundle.mainWorker!);
-    const logger = new duckdb.VoidLogger();
+    // Pin to MVP bundle — no SharedArrayBuffer, no COOP/COEP headers needed.
+    // Use a Blob worker (per official docs) so the Worker is same-origin
+    // even though the script URL comes from jsDelivr CDN.
+    const { mvp } = duckdb.getJsDelivrBundles();
+    const workerUrl = URL.createObjectURL(
+      new Blob([`importScripts("${mvp.mainWorker!}");`], { type: 'text/javascript' })
+    );
+    const worker = new Worker(workerUrl);
+    URL.revokeObjectURL(workerUrl);
 
+    const logger = new duckdb.VoidLogger();
     _db = new duckdb.AsyncDuckDB(logger, worker);
-    await _db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    await _db.instantiate(mvp.mainModule);
 
     _conn = await _db.connect();
-
-    try { await _conn.query('PRAGMA threads=4'); } catch { /* ignore */ }
   })();
 
   return _initPromise;

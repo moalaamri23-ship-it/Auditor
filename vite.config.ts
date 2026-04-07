@@ -7,5 +7,4 @@ export default defineConfig({
     exclude: ['@duckdb/duckdb-wasm'],
     include: ['xlsx'],
   },
-  assetsInclude: ['**/*.wasm'],
 })
