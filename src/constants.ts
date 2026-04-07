@@ -182,11 +182,11 @@ export const GRANULARITY = {
 // AI PROVIDERS
 // ─────────────────────────────────────────────
 export const AI_PROVIDERS = {
-  gemini:     { name: 'Google Gemini',   defaultModel: 'gemini-2.0-flash' },
-  openai:     { name: 'OpenAI',          defaultModel: 'gpt-4o-mini' },
-  anthropic:  { name: 'Anthropic Claude', defaultModel: 'claude-sonnet-4-20250514' },
-  azure:      { name: 'Azure OpenAI',    defaultModel: '' },
-  openrouter: { name: 'OpenRouter',      defaultModel: '' },
+  gemini:     { name: 'Google Gemini',    defaultModel: 'gemini-2.0-flash' },
+  openai:     { name: 'OpenAI',           defaultModel: 'gpt-4o-mini' },
+  anthropic:  { name: 'Anthropic Claude', defaultModel: 'claude-sonnet-4-6' },
+  azure:      { name: 'Azure OpenAI',     defaultModel: '' },
+  openrouter: { name: 'OpenRouter',       defaultModel: '' },
 } as const;
 
 // ─────────────────────────────────────────────

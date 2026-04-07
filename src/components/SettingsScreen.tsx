@@ -8,12 +8,32 @@ type ProviderKey = keyof typeof AI_PROVIDERS;
 
 const PROVIDER_KEYS = Object.keys(AI_PROVIDERS) as ProviderKey[];
 
-const MODEL_EXAMPLES: Record<ProviderKey, string[]> = {
-  gemini:     ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-2.5-pro-preview'],
-  openai:     ['gpt-4o-mini', 'gpt-4o', 'o3-mini'],
-  anthropic:  ['claude-sonnet-4-20250514', 'claude-haiku-4-5-20251001', 'claude-opus-4-6'],
+// Per-provider model catalogue — matches reliability_app_Create skill spec
+// (latest model IDs from Anthropic/Google/OpenAI as of 2026-04)
+const MODEL_CATALOGUE: Record<ProviderKey, { id: string; label: string; note?: string }[]> = {
+  gemini: [
+    { id: 'gemini-2.0-flash',       label: 'Gemini 2.0 Flash',       note: 'Default · fast + capable' },
+    { id: 'gemini-2.5-pro-preview', label: 'Gemini 2.5 Pro Preview',  note: 'Most capable' },
+    { id: 'gemini-1.5-pro',         label: 'Gemini 1.5 Pro',          note: 'Stable' },
+    { id: 'gemini-1.5-flash',       label: 'Gemini 1.5 Flash',        note: 'Efficient' },
+  ],
+  openai: [
+    { id: 'gpt-4o-mini',  label: 'GPT-4o mini',  note: 'Default · fast + affordable' },
+    { id: 'gpt-4o',       label: 'GPT-4o',        note: 'Most capable' },
+    { id: 'o3-mini',      label: 'o3-mini',        note: 'Reasoning' },
+  ],
+  anthropic: [
+    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',   note: 'Default · balanced' },
+    { id: 'claude-opus-4-6',           label: 'Claude Opus 4.6',     note: 'Most capable' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',    note: 'Efficient' },
+  ],
   azure:      [],
-  openrouter: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash'],
+  openrouter: [
+    { id: 'openai/gpt-4o',                    label: 'OpenAI GPT-4o' },
+    { id: 'anthropic/claude-sonnet-4-6',      label: 'Claude Sonnet 4.6' },
+    { id: 'google/gemini-2.0-flash',          label: 'Gemini 2.0 Flash' },
+    { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
+  ],
 };
 
 type TestStatus = null | 'testing' | 'ok' | 'error';
@@ -43,7 +63,7 @@ export default function SettingsScreen() {
     }
   };
 
-  const examples = MODEL_EXAMPLES[localProvider] ?? [];
+  const models     = MODEL_CATALOGUE[localProvider] ?? [];
   const providerInfo = AI_PROVIDERS[localProvider];
 
   return (
@@ -60,7 +80,7 @@ export default function SettingsScreen() {
           </div>
           <div>
             <h2 className="text-lg font-semibold mb-1">AI Provider Configuration</h2>
-            <p className="text-xs text-slate-400">Select a provider, choose a model, then enter your API key.</p>
+            <p className="text-xs text-slate-400">Select a provider, pick a model, then enter your API key.</p>
           </div>
         </div>
 
@@ -91,47 +111,118 @@ export default function SettingsScreen() {
             </div>
           </div>
 
-          {/* Model ID */}
-          <div>
-            <label className="text-xs font-semibold text-slate-500 mb-1 block">
-              Model ID
-              {localProvider === 'openrouter'
-                ? <span className="text-red-500 ml-1">*</span>
-                : <span className="text-slate-400 font-normal ml-1">(optional — uses default if blank)</span>
-              }
-            </label>
-            <input
-              type="text"
-              value={localModelId}
-              onChange={e => { setLocalModelId(e.target.value); setTestStatus(null); }}
-              placeholder={providerInfo.defaultModel || 'Enter model ID…'}
-              className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
-            />
-            {examples.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {examples.map(ex => (
+          {/* Model picker — quick-select chips for known providers */}
+          {models.length > 0 && (
+            <div>
+              <label className="text-xs font-semibold text-slate-500 mb-2 block">Model</label>
+              <div className="space-y-1.5">
+                {models.map(m => (
                   <button
-                    key={ex}
+                    key={m.id}
                     type="button"
-                    onClick={() => { setLocalModelId(ex); setTestStatus(null); }}
+                    onClick={() => { setLocalModelId(m.id); setTestStatus(null); }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded border text-sm transition-all text-left ${
+                      localModelId === m.id
+                        ? 'border-brand-600 bg-brand-600/10 text-brand-700 font-semibold ring-1 ring-brand-600'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="font-mono text-xs">{m.label}</span>
+                    {m.note && (
+                      <span className={`text-[10px] font-normal ${localModelId === m.id ? 'text-brand-600' : 'text-slate-400'}`}>
+                        {m.note}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {/* Manual override for power users */}
+              <div className="mt-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 block">
+                  Custom model ID (overrides selection above)
+                </label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={models.find(m => m.id === localModelId) ? '' : localModelId}
+                  onChange={e => { setLocalModelId(e.target.value); setTestStatus(null); }}
+                  placeholder="e.g. gemini-2.5-pro-exp-03-25"
+                  className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* OpenRouter — free-text model ID */}
+          {localProvider === 'openrouter' && (
+            <div>
+              <label className="text-xs font-semibold text-slate-500 mb-2 block">
+                Model ID <span className="text-red-500">*</span>
+              </label>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {models.map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => { setLocalModelId(m.id); setTestStatus(null); }}
                     className={`text-[10px] font-mono px-2 py-0.5 rounded border transition cursor-pointer ${
-                      localModelId === ex
+                      localModelId === m.id
                         ? 'bg-brand-600 text-white border-brand-600'
                         : 'bg-white text-slate-500 border-slate-200 hover:border-brand-400 hover:text-brand-600'
                     }`}
                   >
-                    {ex}
+                    {m.id}
                   </button>
                 ))}
               </div>
-            )}
-          </div>
+              <input
+                type="text"
+                autoComplete="off"
+                value={localModelId}
+                onChange={e => { setLocalModelId(e.target.value); setTestStatus(null); }}
+                placeholder="provider/model-name"
+                className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
+              />
+              <div className="mt-2 p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800 leading-relaxed">
+                <strong>OpenRouter</strong> gives you access to 300+ models from OpenAI, Anthropic, Google, Meta,
+                Mistral, DeepSeek, and more — all through a single API key.
+              </div>
+            </div>
+          )}
+
+          {/* Azure endpoint */}
+          {localProvider === 'azure' && (
+            <div className="animate-enter space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Model / Deployment Name</label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={localModelId}
+                  onChange={e => { setLocalModelId(e.target.value); setTestStatus(null); }}
+                  placeholder="my-gpt4o-deployment"
+                  className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Azure Endpoint</label>
+                <input
+                  type="url"
+                  value={localEndpoint}
+                  onChange={e => setLocalEndpoint(e.target.value)}
+                  placeholder="https://your-resource.openai.azure.com/"
+                  className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
+                />
+              </div>
+            </div>
+          )}
 
           {/* API Key */}
           <div>
             <label className="text-xs font-semibold text-slate-500 mb-1 block">API Key</label>
             <input
               type="password"
+              autoComplete="new-password"
               value={localKey}
               onChange={e => { setLocalKey(e.target.value); setTestStatus(null); }}
               placeholder={`Enter your ${providerInfo.name} API key…`}
@@ -139,28 +230,6 @@ export default function SettingsScreen() {
             />
             <p className="mt-1 text-xs text-slate-400 italic">Stored in your browser's local storage only.</p>
           </div>
-
-          {/* Azure endpoint */}
-          {localProvider === 'azure' && (
-            <div className="animate-enter">
-              <label className="text-xs font-semibold text-slate-500 mb-1 block">Azure Endpoint</label>
-              <input
-                type="url"
-                value={localEndpoint}
-                onChange={e => setLocalEndpoint(e.target.value)}
-                placeholder="https://your-resource.openai.azure.com/"
-                className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
-              />
-            </div>
-          )}
-
-          {/* OpenRouter note */}
-          {localProvider === 'openrouter' && (
-            <div className="animate-enter p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800 leading-relaxed">
-              <strong>OpenRouter</strong> gives you access to 300+ models from OpenAI, Anthropic, Google, Meta, Mistral,
-              DeepSeek, and more — all through a single API key.
-            </div>
-          )}
 
           {/* Test result */}
           {testStatus && (
