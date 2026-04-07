@@ -27,14 +27,17 @@ export async function initDuckDB(): Promise<void> {
   if (_initPromise) return _initPromise;   // init in progress
 
   _initPromise = (async () => {
-    // Use locally-served files from /public/duckdb/ — no CDN, no network required
-    const workerUrl  = '/duckdb/duckdb-browser-mvp.worker.js';
-    const wasmUrl    = '/duckdb/duckdb-mvp.wasm';
+    const bundles = duckdb.getJsDelivrBundles();
+    const bundle  = await duckdb.selectBundle(bundles);
 
+    const workerUrl  = URL.createObjectURL(
+      new Blob([`importScripts("${bundle.mainWorker!}");`], { type: 'text/javascript' })
+    );
     const worker = new Worker(workerUrl);
     const logger = new duckdb.VoidLogger();
     _db = new duckdb.AsyncDuckDB(logger, worker);
-    await _db.instantiate(wasmUrl);
+    await _db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    URL.revokeObjectURL(workerUrl);
 
     _conn = await _db.connect();
   })();
