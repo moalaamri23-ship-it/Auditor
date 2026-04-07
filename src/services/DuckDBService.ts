@@ -27,23 +27,14 @@ export async function initDuckDB(): Promise<void> {
   if (_initPromise) return _initPromise;   // init in progress
 
   _initPromise = (async () => {
-    const { mvp } = duckdb.getJsDelivrBundles();
+    // Use locally-served files from /public/duckdb/ — no CDN, no network required
+    const workerUrl  = '/duckdb/duckdb-browser-mvp.worker.js';
+    const wasmUrl    = '/duckdb/duckdb-mvp.wasm';
 
-    // Pre-fetch the worker script in the main thread so the Blob worker
-    // runs entirely same-origin with no cross-origin importScripts call.
-    const workerScript = await fetch(mvp.mainWorker!).then(r => {
-      if (!r.ok) throw new Error(`Failed to fetch DuckDB worker: ${r.status}`);
-      return r.text();
-    });
-    const workerUrl = URL.createObjectURL(
-      new Blob([workerScript], { type: 'text/javascript' })
-    );
     const worker = new Worker(workerUrl);
-    URL.revokeObjectURL(workerUrl);
-
     const logger = new duckdb.VoidLogger();
     _db = new duckdb.AsyncDuckDB(logger, worker);
-    await _db.instantiate(mvp.mainModule);
+    await _db.instantiate(wasmUrl);
 
     _conn = await _db.connect();
   })();
@@ -476,12 +467,14 @@ export async function createAIFlagsTable(): Promise<void> {
   if (!_conn) throw new Error('DuckDB is not initialised.');
   await _conn.query(`
     CREATE OR REPLACE TABLE ai_flags (
-      wo_number       VARCHAR,
-      category        VARCHAR,
-      severity        VARCHAR,
-      comment         VARCHAR,
-      description     VARCHAR,
-      equipment       VARCHAR
+      wo_number  VARCHAR,
+      category   VARCHAR,
+      severity   VARCHAR,
+      comment    VARCHAR,
+      symptom    VARCHAR,
+      codes      VARCHAR,
+      closure    VARCHAR,
+      equipment  VARCHAR
     )
   `);
 }
@@ -490,10 +483,10 @@ export async function createAIFlagsTable(): Promise<void> {
 export async function insertAIFlagsBatch(flags: AIFlag[]): Promise<void> {
   if (!_conn || flags.length === 0) return;
   const rows = flags.map(f =>
-    `('${esc(f.woNumber)}','${esc(f.category)}','${esc(f.severity)}','${esc(f.comment)}','${esc(f.description ?? '')}','${esc(f.equipment ?? '')}')`
+    `('${esc(f.woNumber)}','${esc(f.category)}','${esc(f.severity)}','${esc(f.comment)}','${esc(f.symptom ?? '')}','${esc(f.codes ?? '')}','${esc(f.closure ?? '')}','${esc(f.equipment ?? '')}')`
   ).join(',\n');
   await _conn.query(`
-    INSERT INTO ai_flags (wo_number, category, severity, comment, description, equipment)
+    INSERT INTO ai_flags (wo_number, category, severity, comment, symptom, codes, closure, equipment)
     VALUES ${rows}
   `);
 }
@@ -504,17 +497,19 @@ export async function restoreAIFlagsFromSession(flags: AIFlag[]): Promise<void> 
   if (flags.length > 0) await insertAIFlagsBatch(flags);
 }
 
-/** Fetch AI-flagged WOs for a given category from DuckDB */
+/** Fetch all AI flags (optionally filtered by category) */
 export async function queryAIFlags(category?: string): Promise<AIFlag[]> {
   const where = category ? `WHERE category = '${esc(category)}'` : '';
   const rows = await _q(`SELECT * FROM ai_flags ${where} ORDER BY severity DESC, wo_number`);
   return rows.map(r => ({
-    woNumber:    String(r.wo_number   ?? ''),
-    category:    String(r.category    ?? '') as AIFlag['category'],
-    severity:    String(r.severity    ?? '') as AIFlag['severity'],
-    comment:     String(r.comment     ?? ''),
-    description: String(r.description ?? ''),
-    equipment:   String(r.equipment   ?? ''),
+    woNumber:  String(r.wo_number ?? ''),
+    category:  String(r.category  ?? '') as AIFlag['category'],
+    severity:  String(r.severity  ?? '') as AIFlag['severity'],
+    comment:   String(r.comment   ?? ''),
+    symptom:   String(r.symptom   ?? ''),
+    codes:     String(r.codes     ?? ''),
+    closure:   String(r.closure   ?? ''),
+    equipment: String(r.equipment ?? ''),
   }));
 }
 

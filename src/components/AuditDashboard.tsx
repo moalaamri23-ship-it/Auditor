@@ -379,12 +379,13 @@ function DataContextStrip({ results }: { results: AnalysisResults }) {
 
 // ─── AI Flag Summary Card ─────────────────────────────────────────────────────
 
-const FLAG_CATEGORY_META: Record<FlagCategory, { label: string; description: string; color: string }> = {
-  desc_code_alignment:    { label: 'Code Alignment',      description: 'Description vs reliability/failure codes',  color: 'text-red-600 bg-red-50 border-red-200'     },
-  confirmation_relevance: { label: 'Confirmation Relevance', description: 'Confirmation unrelated to work described', color: 'text-orange-600 bg-orange-50 border-orange-200' },
-  confirmation_quality:   { label: 'Confirmation Quality',   description: 'Too vague, generic, or copy-pasted',       color: 'text-amber-600 bg-amber-50 border-amber-200'   },
-  code_completeness:      { label: 'Code Completeness',     description: 'Missing codes implied by description',      color: 'text-blue-600 bg-blue-50 border-blue-200'      },
-  generic_description:    { label: 'Generic Description',   description: 'WO description too vague to be useful',    color: 'text-slate-600 bg-slate-50 border-slate-200'   },
+const FLAG_CATEGORY_META: Record<FlagCategory, { label: string; description: string; color: string; group: string }> = {
+  symptom_code_conflict:     { label: 'Symptom → Code',              description: 'Symptom vs assigned codes',         color: 'text-red-600 bg-red-50 border-red-200',         group: 'CLASH'   },
+  symptom_closure_conflict:  { label: 'Symptom → Closure',           description: 'Symptom vs confirmation text',       color: 'text-orange-600 bg-orange-50 border-orange-200', group: 'CLASH'   },
+  code_closure_conflict:     { label: 'Code → Closure',              description: 'Codes vs confirmation narrative',    color: 'text-amber-600 bg-amber-50 border-amber-200',   group: 'CLASH'   },
+  incomplete_classification: { label: 'Incomplete Classification',   description: 'Missing codes despite clear symptom', color: 'text-blue-600 bg-blue-50 border-blue-200',      group: 'QUALITY' },
+  poor_closure:              { label: 'Poor Closure',                description: 'Vague / generic confirmation',       color: 'text-purple-600 bg-purple-50 border-purple-200', group: 'QUALITY' },
+  generic_symptom:           { label: 'Generic Symptom',             description: 'WO description too vague to audit', color: 'text-slate-600 bg-slate-50 border-slate-200',   group: 'QUALITY' },
 };
 
 function AIFlagSummaryCard({ summary, onViewAll }: { summary: AIFlagSummary; onViewAll: () => void }) {
@@ -420,20 +421,44 @@ function AIFlagSummaryCard({ summary, onViewAll }: { summary: AIFlagSummary; onV
         </div>
       </div>
 
-      {/* Category breakdown */}
-      <div className="grid sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-        {categories.map(([cat, count]) => {
-          const meta = FLAG_CATEGORY_META[cat];
-          return (
-            <div key={cat} className="px-4 py-3">
-              <div className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border mb-2 ${meta.color}`}>
-                {meta.label}
+      {/* Clash checks row */}
+      <div className="px-4 pt-3 pb-1">
+        <div className="text-[10px] font-bold uppercase text-slate-400 mb-2">Clash Checks</div>
+        <div className="grid grid-cols-3 gap-3">
+          {(['symptom_code_conflict', 'symptom_closure_conflict', 'code_closure_conflict'] as FlagCategory[]).map(cat => {
+            const meta  = FLAG_CATEGORY_META[cat];
+            const count = summary.byCategory[cat] ?? 0;
+            return (
+              <div key={cat} className="border border-slate-100 rounded p-3">
+                <div className={`inline-flex text-[10px] font-bold px-1.5 py-0.5 rounded border mb-1.5 ${meta.color}`}>
+                  {meta.label}
+                </div>
+                <div className="text-2xl font-bold font-mono text-slate-900">{count.toLocaleString()}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">{meta.description}</div>
               </div>
-              <div className="text-xl font-bold font-mono text-slate-900">{count.toLocaleString()}</div>
-              <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{meta.description}</div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Quality checks row */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="text-[10px] font-bold uppercase text-slate-400 mb-2">Quality Checks</div>
+        <div className="grid grid-cols-3 gap-3">
+          {(['incomplete_classification', 'poor_closure', 'generic_symptom'] as FlagCategory[]).map(cat => {
+            const meta  = FLAG_CATEGORY_META[cat];
+            const count = summary.byCategory[cat] ?? 0;
+            return (
+              <div key={cat} className="border border-slate-100 rounded p-3">
+                <div className={`inline-flex text-[10px] font-bold px-1.5 py-0.5 rounded border mb-1.5 ${meta.color}`}>
+                  {meta.label}
+                </div>
+                <div className="text-2xl font-bold font-mono text-slate-900">{count.toLocaleString()}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">{meta.description}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -204,30 +204,42 @@ export interface AIFinding {
 // ─────────────────────────────────────────────
 // AI PER-RECORD FLAGS
 // ─────────────────────────────────────────────
+//
+// Three artefacts form a triangle:
+//   SYMPTOM (WO/notification description)
+//   CLASSIFICATION (reliability codes, failure mode, cause code)
+//   CLOSURE (confirmation text short + long)
+//
+// Six check categories — three clashes + three quality flags:
 
 export type FlagCategory =
-  | 'desc_code_alignment'   // WO description vs reliability/failure codes
-  | 'confirmation_relevance' // Confirmation text unrelated to the work
-  | 'confirmation_quality'  // Confirmation too vague/generic/copy-pasted
-  | 'code_completeness'     // Missing codes implied by description
-  | 'generic_description';  // WO description too generic to be useful
+  // ── Clash checks (pairwise inconsistency) ─────────────────────
+  | 'symptom_code_conflict'     // SYMPTOM ↔ CLASSIFICATION: codes don't match reported symptom
+  | 'symptom_closure_conflict'  // SYMPTOM ↔ CLOSURE: confirmation describes different work than reported
+  | 'code_closure_conflict'     // CLASSIFICATION ↔ CLOSURE: codes don't match what technician wrote
+  // ── Quality checks (individual artefact quality) ──────────────
+  | 'incomplete_classification' // CLASSIFICATION: codes blank/partial despite clear description
+  | 'poor_closure'              // CLOSURE: confirmation too vague/generic/copy-pasted to be auditable
+  | 'generic_symptom';          // SYMPTOM: WO description too generic to cross-check anything
 
 export interface AIFlag {
-  woNumber:    string;
-  category:    FlagCategory;
-  severity:    'HIGH' | 'MEDIUM' | 'LOW';
-  comment:     string;   // AI's specific explanation (max ~120 chars)
-  // Denormalised for display without a DuckDB round-trip
-  description?: string; // WO description snapshot
-  equipment?:   string; // Equipment snapshot
+  woNumber:   string;
+  category:   FlagCategory;
+  severity:   'HIGH' | 'MEDIUM' | 'LOW';
+  comment:    string;         // AI explanation — specific, references actual text (≤150 chars)
+  // Snapshots for side-by-side display (denormalised — no DuckDB round-trip needed)
+  symptom?:   string;         // WO/notification description
+  codes?:     string;         // formatted: "FM: X | Cause: Y | RC1: Z"
+  closure?:   string;         // confirmation short text (truncated)
+  equipment?: string;
 }
 
 export interface AIFlagSummary {
-  totalFlagged:   number;   // distinct WOs with at least one flag
-  totalFlags:     number;   // total flag entries
+  totalFlagged:   number;
+  totalFlags:     number;
   byCategory:     Record<FlagCategory, number>;
-  generatedAt:    string;   // ISO — when the run completed
-  scopeWOCount:   number;   // WOs in scope when flags were generated
+  generatedAt:    string;   // ISO
+  scopeWOCount:   number;
 }
 
 // ─────────────────────────────────────────────

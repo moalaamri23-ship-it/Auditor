@@ -110,21 +110,66 @@ export default function AnalysisView() {
 
 // ─── AI Flags Panel ───────────────────────────────────────────────────────────
 
-const FLAG_CATEGORY_META: Record<FlagCategory, { label: string; description: string }> = {
-  desc_code_alignment:    { label: 'Code Alignment',        description: 'WO description inconsistent with assigned reliability/failure codes' },
-  confirmation_relevance: { label: 'Confirmation Relevance', description: 'Confirmation text does not relate to the work described in the WO'    },
-  confirmation_quality:   { label: 'Confirmation Quality',   description: 'Confirmation is too vague, generic, or appears copy-pasted'           },
-  code_completeness:      { label: 'Code Completeness',      description: 'Reliability/failure codes missing when description clearly implies them'},
-  generic_description:    { label: 'Generic Description',    description: 'WO description too generic to carry diagnostic or audit value'        },
+import type { AIFlagSummary } from '../types';
+
+type CheckGroup = 'clash' | 'quality';
+interface CategoryMeta {
+  label: string; group: CheckGroup; groupLabel: string;
+  description: string; artefacts: string[]; color: string;
+}
+
+const FLAG_CATEGORY_META: Record<FlagCategory, CategoryMeta> = {
+  symptom_code_conflict: {
+    label: 'Symptom → Code',
+    group: 'clash', groupLabel: 'CLASH',
+    description: 'The reported symptom is inconsistent with the assigned reliability/failure codes. The codes were likely applied to the wrong job, or the wrong codes were selected.',
+    artefacts: ['symptom', 'codes'],
+    color: 'bg-red-100 text-red-700',
+  },
+  symptom_closure_conflict: {
+    label: 'Symptom → Closure',
+    group: 'clash', groupLabel: 'CLASH',
+    description: 'The closure confirmation describes work that does not relate to the reported symptom. The technician may have confirmed the wrong WO.',
+    artefacts: ['symptom', 'closure'],
+    color: 'bg-orange-100 text-orange-700',
+  },
+  code_closure_conflict: {
+    label: 'Code → Closure',
+    group: 'clash', groupLabel: 'CLASH',
+    description: 'The assigned classification codes contradict what the technician described in the confirmation. The codes do not match the actual work narrative.',
+    artefacts: ['codes', 'closure'],
+    color: 'bg-amber-100 text-amber-700',
+  },
+  incomplete_classification: {
+    label: 'Incomplete Classification',
+    group: 'quality', groupLabel: 'QUALITY',
+    description: 'Failure mode, cause code, and reliability codes are missing despite the description clearly implying what they should be. Prevents failure pattern analysis.',
+    artefacts: ['symptom', 'codes'],
+    color: 'bg-blue-100 text-blue-700',
+  },
+  poor_closure: {
+    label: 'Poor Closure',
+    group: 'quality', groupLabel: 'QUALITY',
+    description: 'The confirmation text is too vague, too short, or copy-pasted. It adds no information beyond the WO description and cannot verify the work was done correctly.',
+    artefacts: ['closure'],
+    color: 'bg-purple-100 text-purple-700',
+  },
+  generic_symptom: {
+    label: 'Generic Symptom',
+    group: 'quality', groupLabel: 'QUALITY',
+    description: 'The WO description is so generic it cannot be cross-checked against codes or confirmation. When raised, clash checks for this WO become unreliable.',
+    artefacts: ['symptom'],
+    color: 'bg-slate-100 text-slate-600',
+  },
 };
 
-const FLAG_CATEGORIES = Object.keys(FLAG_CATEGORY_META) as FlagCategory[];
-
-import type { AIFlagSummary } from '../types';
+const CLASH_CATS:   FlagCategory[] = ['symptom_code_conflict', 'symptom_closure_conflict', 'code_closure_conflict'];
+const QUALITY_CATS: FlagCategory[] = ['incomplete_classification', 'poor_closure', 'generic_symptom'];
 
 function AIFlagsPanel({ flags, summary }: { flags: AIFlag[]; summary: AIFlagSummary | null | undefined }) {
   const [activeCategory, setActiveCategory] = useState<FlagCategory | 'all'>('all');
   const [severityFilter, setSeverityFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
+  const [expandedKey, setExpandedKey]       = useState<string | null>(null);
 
   if (!summary) {
     return (
@@ -144,94 +189,172 @@ function AIFlagsPanel({ flags, summary }: { flags: AIFlag[]; summary: AIFlagSumm
     return true;
   });
 
+  const activeMeta = activeCategory !== 'all' ? FLAG_CATEGORY_META[activeCategory] : null;
+
   return (
-    <div className="space-y-6 animate-enter">
-      {/* Header */}
+    <div className="space-y-5 animate-enter">
+
+      {/* ── Header ── */}
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">AI Text Flags</h2>
+        <h2 className="text-2xl font-bold text-slate-900">AI Text Quality Flags</h2>
         <p className="text-sm text-slate-500 mt-0.5">
-          {summary.totalFlagged.toLocaleString()} WOs flagged · {summary.totalFlags.toLocaleString()} total flags · {summary.scopeWOCount.toLocaleString()} WOs analysed
+          {summary.totalFlagged.toLocaleString()} WOs flagged · {summary.totalFlags.toLocaleString()} flags · {summary.scopeWOCount.toLocaleString()} WOs in scope
         </p>
       </div>
 
-      {/* Category tabs */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setActiveCategory('all')}
-          className={`px-3 py-1.5 rounded text-xs font-bold border transition ${activeCategory === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-        >
-          All ({flags.length})
-        </button>
-        {FLAG_CATEGORIES.map(cat => {
-          const count = summary.byCategory[cat] ?? 0;
-          const active = activeCategory === cat;
-          return (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-3 py-1.5 rounded text-xs font-bold border transition ${active ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-            >
-              {FLAG_CATEGORY_META[cat].label} ({count})
-            </button>
-          );
-        })}
+      {/* ── Category overview ── */}
+      <div className="space-y-2">
+        <div className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-2">
+          <span>Clash Checks</span>
+          <span className="flex-1 h-px bg-slate-200" />
+          <span className="text-slate-300 font-normal">pairwise inconsistency</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {CLASH_CATS.map(cat => (
+            <CategoryTile key={cat} cat={cat} count={summary.byCategory[cat] ?? 0}
+              active={activeCategory === cat}
+              onClick={() => setActiveCategory(activeCategory === cat ? 'all' : cat)} />
+          ))}
+        </div>
+        <div className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-2 mt-3">
+          <span>Quality Checks</span>
+          <span className="flex-1 h-px bg-slate-200" />
+          <span className="text-slate-300 font-normal">individual artefact quality</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {QUALITY_CATS.map(cat => (
+            <CategoryTile key={cat} cat={cat} count={summary.byCategory[cat] ?? 0}
+              active={activeCategory === cat}
+              onClick={() => setActiveCategory(activeCategory === cat ? 'all' : cat)} />
+          ))}
+        </div>
       </div>
 
-      {/* Category description */}
-      {activeCategory !== 'all' && (
-        <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded px-3 py-2">
-          {FLAG_CATEGORY_META[activeCategory].description}
+      {/* ── Active category context ── */}
+      {activeMeta && (
+        <div className="flex gap-3 p-3 bg-slate-50 border border-slate-200 rounded animate-enter">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded self-start ${activeMeta.color}`}>
+            {activeMeta.groupLabel}
+          </span>
+          <div>
+            <div className="text-xs font-bold text-slate-700">{activeMeta.label}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{activeMeta.description}</div>
+          </div>
         </div>
       )}
 
-      {/* Severity filter */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-bold text-slate-400 uppercase">Severity:</span>
+      {/* ── Filters ── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button onClick={() => setActiveCategory('all')}
+          className={`px-2.5 py-1 rounded text-[10px] font-bold border transition ${activeCategory === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+          All categories
+        </button>
+        <div className="h-3 w-px bg-slate-200" />
+        <span className="text-[10px] font-bold text-slate-400 uppercase">Severity:</span>
         {(['ALL', 'HIGH', 'MEDIUM', 'LOW'] as const).map(s => (
-          <button
-            key={s}
-            onClick={() => setSeverityFilter(s)}
-            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${severityFilter === s ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
-          >
+          <button key={s} onClick={() => setSeverityFilter(s)}
+            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${severityFilter === s ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
             {s}
           </button>
         ))}
-        <span className="text-xs text-slate-400 ml-2">{filtered.length} records</span>
+        <span className="text-xs text-slate-400 ml-auto">{filtered.length} records</span>
       </div>
 
-      {/* Flag list */}
+      {/* ── Flag list ── */}
       {filtered.length === 0 ? (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex gap-3">
+        <div className="bg-green-50 border border-green-200 rounded p-4 flex gap-3">
           <Icon name="checkCircle" className="w-5 h-5 text-green-500 shrink-0" />
           <div className="text-sm text-green-700">No flags match the current filter.</div>
         </div>
       ) : (
         <div className="bg-white rounded shadow border border-slate-200 overflow-hidden">
-          <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase text-slate-400">
-            {filtered.length} flagged work orders
-          </div>
-          <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto scroll-thin">
-            {filtered.map((f, i) => (
-              <div key={i} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50">
-                <SeverityBadge severity={f.severity} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold font-mono text-slate-800">{f.woNumber}</span>
-                    {f.equipment && <span className="text-xs text-slate-400">{f.equipment}</span>}
-                    <span className="text-[10px] font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-200">
-                      {FLAG_CATEGORY_META[f.category]?.label ?? f.category}
-                    </span>
-                  </div>
-                  {f.description && (
-                    <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{f.description}</div>
+          <div className="divide-y divide-slate-100 max-h-[55vh] overflow-y-auto scroll-thin">
+            {filtered.map((f, i) => {
+              const meta = FLAG_CATEGORY_META[f.category];
+              const key  = `${f.woNumber}-${f.category}-${i}`;
+              const open = expandedKey === key;
+              return (
+                <div key={key}>
+                  <button onClick={() => setExpandedKey(open ? null : key)}
+                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition text-left">
+                    <SeverityBadge severity={f.severity} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold font-mono text-slate-800">{f.woNumber}</span>
+                        {f.equipment && <span className="text-xs text-slate-500">{f.equipment}</span>}
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${meta.color}`}>
+                          {meta.label}
+                        </span>
+                      </div>
+                      {f.symptom && <div className="text-xs text-slate-500 mt-0.5 truncate">{f.symptom}</div>}
+                      <div className="text-xs text-slate-700 mt-1">
+                        <span className="text-slate-400 mr-1">Finding:</span>
+                        <span className="italic">{f.comment}</span>
+                      </div>
+                    </div>
+                    <Icon name={open ? 'chevronUp' : 'chevronDown'} className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                  </button>
+
+                  {/* ── Side-by-side artefact view ── */}
+                  {open && (
+                    <div className="px-4 pb-4 pt-2 bg-slate-50 border-t border-slate-100 animate-enter">
+                      <div className="grid grid-cols-3 gap-3">
+                        <ArtefactCard title="Symptom" subtitle="WO / Notification Description"
+                          value={f.symptom} emptyLabel="No description recorded"
+                          highlight={meta.artefacts.includes('symptom')}
+                          highlightColor="border-amber-400 bg-amber-50" />
+                        <ArtefactCard title="Classification" subtitle="Failure Mode · Cause · Reliability Codes"
+                          value={f.codes} emptyLabel="No codes assigned"
+                          highlight={meta.artefacts.includes('codes')}
+                          highlightColor="border-blue-400 bg-blue-50" mono />
+                        <ArtefactCard title="Closure" subtitle="Confirmation Text"
+                          value={f.closure} emptyLabel="No confirmation recorded"
+                          highlight={meta.artefacts.includes('closure')}
+                          highlightColor="border-purple-400 bg-purple-50" />
+                      </div>
+                      <div className="mt-3 flex items-start gap-2 p-2.5 bg-white border border-slate-200 rounded text-xs">
+                        <Icon name="wand" className="w-3.5 h-3.5 text-brand-500 shrink-0 mt-0.5" />
+                        <div><span className="font-bold text-slate-600">AI finding: </span><span className="text-slate-700">{f.comment}</span></div>
+                      </div>
+                    </div>
                   )}
-                  <div className="text-xs text-slate-700 mt-1 italic">"{f.comment}"</div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CategoryTile({ cat, count, active, onClick }: { cat: FlagCategory; count: number; active: boolean; onClick: () => void }) {
+  const meta = FLAG_CATEGORY_META[cat];
+  return (
+    <button onClick={onClick}
+      className={`text-left p-3 rounded border transition ${active ? 'border-brand-500 ring-2 ring-brand-100 bg-white shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}`}>
+      <div className="flex items-start justify-between mb-1">
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${meta.color}`}>{meta.groupLabel}</span>
+        <span className="text-xl font-bold font-mono text-slate-900">{count}</span>
+      </div>
+      <div className="text-xs font-bold text-slate-700 leading-tight">{meta.label}</div>
+    </button>
+  );
+}
+
+function ArtefactCard({ title, subtitle, value, highlight, highlightColor, emptyLabel, mono }: {
+  title: string; subtitle: string; value?: string;
+  highlight: boolean; highlightColor: string; emptyLabel: string; mono?: boolean;
+}) {
+  const empty = !value || value.trim() === '' || value === '— none assigned —';
+  return (
+    <div className={`rounded border-2 p-3 ${highlight ? highlightColor : 'border-slate-200 bg-white'}`}>
+      <div className="text-[10px] font-bold uppercase text-slate-400">{title}</div>
+      <div className="text-[10px] text-slate-400 mb-2">{subtitle}</div>
+      {empty
+        ? <div className="text-xs text-slate-400 italic">{emptyLabel}</div>
+        : <div className={`text-xs text-slate-700 leading-relaxed whitespace-pre-wrap ${mono ? 'font-mono' : ''}`}>{value}</div>
+      }
     </div>
   );
 }
