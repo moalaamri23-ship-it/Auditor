@@ -145,6 +145,21 @@ export const EMPTY_FILTERS: AnalysisFilters = {
   systemStatus:       [],
 };
 
+export interface AIModuleInsight {
+  moduleId:   string;
+  moduleName: string;
+  insight:    string;         // AI narrative for this module
+  priority:   'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export interface AIInsights {
+  overallSummary:     string;
+  moduleInsights:     AIModuleInsight[];
+  topRecommendations: string[];
+  insufficientData:   boolean;
+  generatedAt:        string;  // ISO
+}
+
 export interface Session {
   id: string;
   name: string;
@@ -156,6 +171,7 @@ export interface Session {
   validationReport: ValidationReport | null;
   dataProfile: DataProfile | null;
   analysisResults: import('./analysis/analysisTypes').AnalysisResults | null;
+  aiInsights: AIInsights | null;
   maturityScore: number | null; // 0–100 composite
   stage: SessionStage;
   hasDataInDuckDB: boolean;    // false after page refresh (DuckDB is in-memory)

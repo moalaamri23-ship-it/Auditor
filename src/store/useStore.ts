@@ -38,6 +38,7 @@ export const useStore = create<AppState>()(
           validationReport: null,
           dataProfile: null,
           analysisResults: null,
+          aiInsights: null,
           maturityScore: null,
           stage: 'uploaded',
           hasDataInDuckDB: false,

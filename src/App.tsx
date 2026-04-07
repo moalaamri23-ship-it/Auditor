@@ -8,6 +8,7 @@ import AuditDashboard from './components/AuditDashboard';
 import AnalysisView from './components/AnalysisView';
 import IssueExplorer from './components/IssueExplorer';
 import SettingsScreen from './components/SettingsScreen';
+import AIInsightsPanel from './components/AIInsightsPanel';
 import { useStore } from './store/useStore';
 import { initDuckDB } from './services/DuckDBService';
 
@@ -96,7 +97,7 @@ export default function App() {
             {currentScreen === 'profiler'      && <DataProfiler />}
             {currentScreen === 'analysis'      && <AuditDashboard />}
             {currentScreen === 'explorer'      && <IssueExplorer />}
-            {currentScreen === 'insights'      && <PhasePlaceholder label="AI Insights" phase={3} />}
+            {currentScreen === 'insights'      && <AIInsightsPanel />}
             {currentScreen === 'settings'      && <SettingsScreen />}
           </>
         )}

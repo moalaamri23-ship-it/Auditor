@@ -98,13 +98,22 @@ export default function AuditDashboard() {
             {session.name} · Analysed {fmtDate(results.computedAt)}
           </p>
         </div>
-        <button
-          onClick={() => setShowModules(true)}
-          className="bg-slate-900 text-white px-4 py-2 rounded font-bold flex items-center gap-2 text-sm hover:bg-slate-800 transition"
-        >
-          <Icon name="barChart" className="w-4 h-4" />
-          View Modules
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setScreen('insights')}
+            className="bg-gradient-to-r from-brand-600 to-indigo-600 text-white px-4 py-2 rounded font-bold flex items-center gap-2 text-sm shadow hover:shadow-lg transition"
+          >
+            <Icon name="wand" className="w-4 h-4" />
+            AI Insights
+          </button>
+          <button
+            onClick={() => setShowModules(true)}
+            className="bg-slate-900 text-white px-4 py-2 rounded font-bold flex items-center gap-2 text-sm hover:bg-slate-800 transition"
+          >
+            <Icon name="barChart" className="w-4 h-4" />
+            View Modules
+          </button>
+        </div>
       </div>
 
       {/* ── Filter panel ── */}
