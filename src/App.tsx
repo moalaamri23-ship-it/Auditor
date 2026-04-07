@@ -21,7 +21,15 @@ export default function App() {
   // Initialise DuckDB WASM on mount — once, singleton
   useEffect(() => {
     initDuckDB()
-      .then(() => setDbState('ready'))
+      .then(() => {
+        // DuckDB is in-memory — reset all sessions' hasDataInDuckDB flag so
+        // users are prompted to re-upload rather than running queries on empty tables.
+        const { sessions, updateSession } = useStore.getState();
+        sessions.forEach(s => {
+          if (s.hasDataInDuckDB) updateSession(s.id, { hasDataInDuckDB: false });
+        });
+        setDbState('ready');
+      })
       .catch((err: Error) => {
         setDbError(err.message);
         setDbState('error');

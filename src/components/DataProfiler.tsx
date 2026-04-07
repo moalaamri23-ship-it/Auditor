@@ -11,6 +11,7 @@ export default function DataProfiler() {
   const session = useActiveSession();
   const { setScreen, updateSession } = useStore();
   const [isAnalysing, setIsAnalysing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [filters, setFilters]         = useState<AnalysisFilters>(session?.analysisFilters ?? EMPTY_FILTERS);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
 
@@ -23,6 +24,7 @@ export default function DataProfiler() {
   const handleRunAnalysis = async () => {
     if (!session) return;
     setIsAnalysing(true);
+    setAnalysisError(null);
     try {
       const results = await runAllModules(session.id, session.columnMap, filters);
       updateSession(session.id, {
@@ -33,6 +35,10 @@ export default function DataProfiler() {
         lastAnalysedAt: new Date().toISOString(),
       });
       setScreen('analysis');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setAnalysisError(msg);
+      console.error('[Analysis] runAllModules failed:', err);
     } finally {
       setIsAnalysing(false);
     }
@@ -95,6 +101,20 @@ export default function DataProfiler() {
 
       {/* ── Validation accordion ── */}
       {validation && <ValidationAccordion report={validation} />}
+
+      {/* ── Analysis error ── */}
+      {analysisError && (
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded animate-enter">
+          <Icon name="xCircle" className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-bold text-red-700 text-sm">Analysis failed</div>
+            <div className="text-xs text-red-600 mt-0.5 font-mono">{analysisError}</div>
+            <div className="text-xs text-red-500 mt-1">
+              If DuckDB lost its data (page was refreshed), go back to Sessions and re-upload your file.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Analysis scope filters ── */}
       {filterOptions && (

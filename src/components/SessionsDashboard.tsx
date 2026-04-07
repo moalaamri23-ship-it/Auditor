@@ -10,11 +10,11 @@ export default function SessionsDashboard() {
   const openSession = (s: Session) => {
     setActiveSession(s.id);
     if (s.hasDataInDuckDB) {
+      // Data is in DuckDB — go straight to profiler
       setScreen('profiler');
-    } else if (s.stage === 'uploaded') {
-      setScreen('upload'); // prompt to re-upload
     } else {
-      setScreen('profiler');
+      // DuckDB is empty (page refreshed, or first upload) — must re-upload
+      setScreen('upload');
     }
   };
 
