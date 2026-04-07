@@ -9,19 +9,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.29.0",
+    "@tanstack/react-virtual": "^3.13.23",
+    "date-fns": "^3.6.0",
+    "papaparse": "^5.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "zustand": "^5.0.0",
-    "papaparse": "^5.4.1",
+    "recharts": "^2.12.7",
     "xlsx": "^0.18.5",
-    "date-fns": "^3.6.0",
-    "@duckdb/duckdb-wasm": "^1.29.0",
-    "recharts": "^2.12.7"
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@types/papaparse": "^5.3.14",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@types/papaparse": "^5.3.14",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.0",
     "vite": "^6.0.0"
