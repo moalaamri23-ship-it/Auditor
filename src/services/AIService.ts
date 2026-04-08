@@ -15,7 +15,7 @@ import type { AIProvider } from '../types';
 const DEFAULTS: Record<AIProvider, string> = {
   gemini:     'gemini-2.0-flash',
   openai:     'gpt-4o-mini',
-  anthropic:  'claude-sonnet-4-20250514',
+  anthropic:  'claude-sonnet-4-6',
   azure:      'gpt-4o-mini',
   openrouter: '',
 };
@@ -215,4 +215,81 @@ export async function callAI(
   if (!res.ok) throw new Error(`API error ${res.status}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live model fetching — calls provider API, filters to chat-only models,
+// classifies into Pro / Balanced / Efficient tiers.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TieredModels {
+  pro: string[];
+  balanced: string[];
+  efficient: string[];
+  fetchedAt: number;
+}
+
+type FetchableProvider = 'gemini' | 'openai' | 'anthropic';
+
+export async function fetchModels(provider: FetchableProvider, apiKey: string): Promise<TieredModels> {
+  let all: string[] = [];
+
+  if (provider === 'openai') {
+    const res = await fetch('https://api.openai.com/v1/models', {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+    });
+    if (!res.ok) throw new Error(`OpenAI models fetch failed: ${res.status}`);
+    const data = await res.json();
+    const ids: string[] = (data.data || []).map((m: any) => m.id as string);
+    const CHAT_PREFIX  = /^(gpt-|o[0-9]|chatgpt-)/i;
+    const EXCLUDE      = /^ft:|sora|dall-e|whisper|^tts|text-embedding|text-moderation|babbage|davinci|curie|^ada|omni-mini/i;
+    const OLD_SNAPSHOT = /-(03|06|09|12)(01|14|13|28|30)\b/;
+    all = ids.filter(id => CHAT_PREFIX.test(id) && !EXCLUDE.test(id) && !OLD_SNAPSHOT.test(id));
+
+  } else if (provider === 'gemini') {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=100`);
+    if (!res.ok) throw new Error(`Gemini models fetch failed: ${res.status}`);
+    const data = await res.json();
+    const GEMINI_CHAT    = /^gemini-/i;
+    const GEMINI_EXCLUDE = /embed|aqa|retrieval|vision(?!.*gemini)|imagen|veo|bison|gecko|^text-|legacy/i;
+    all = (data.models || [])
+      .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+      .map((m: any) => (m.name as string).replace('models/', ''))
+      .filter((id: string) => GEMINI_CHAT.test(id) && !GEMINI_EXCLUDE.test(id));
+
+  } else if (provider === 'anthropic') {
+    const res = await fetch('https://api.anthropic.com/v1/models', {
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+    });
+    if (!res.ok) throw new Error(`Anthropic models fetch failed: ${res.status}`);
+    const data = await res.json();
+    all = (data.data || []).map((m: any) => m.id as string);
+  }
+
+  return _classifyModels(all);
+}
+
+function _getTier(id: string): 'pro' | 'balanced' | 'efficient' {
+  const s = id.toLowerCase();
+  if (s.includes('deep-research') || s.includes('deepresearch')) return 'pro';
+  if (/\b(mini|flash|haiku|lite|small|nano|micro|basic|instant|speed)\b/.test(s)) return 'efficient';
+  if (/\b(pro|opus|plus|ultra|large|advanced|max|heavy|premium|turbo)\b/.test(s)) return 'pro';
+  if (/^o[3-9](-\d{4}-\d{2}-\d{2})?$/.test(s)) return 'pro';
+  return 'balanced';
+}
+
+function _classifyModels(ids: string[]): TieredModels {
+  const buckets: Record<'pro' | 'balanced' | 'efficient', string[]> = { pro: [], balanced: [], efficient: [] };
+  for (const id of ids) buckets[_getTier(id)].push(id);
+  const sortDesc = (a: string, b: string) => b.localeCompare(a, undefined, { numeric: true });
+  return {
+    pro:       buckets.pro.sort(sortDesc),
+    balanced:  buckets.balanced.sort(sortDesc),
+    efficient: buckets.efficient.sort(sortDesc),
+    fetchedAt: Date.now(),
+  };
 }
