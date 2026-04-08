@@ -149,12 +149,12 @@ export default function SettingsScreen() {
                 liveModels={liveModels[localProvider] ?? null}
                 fallbackModels={FALLBACK_MODELS[localProvider]}
                 provider={localProvider}
+                allowCustomList={localProvider === 'openrouter'}
               />
               {localProvider === 'openrouter' && (
-                <div className="mt-2 p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800 leading-relaxed">
-                  <strong>OpenRouter</strong> gives you access to 300+ models from OpenAI, Anthropic, Google, Meta,
-                  Mistral, DeepSeek, and more — all through a single API key.
-                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Add any OpenRouter model ID (e.g. anthropic/claude-sonnet-4-6, meta-llama/llama-3-70b-instruct)
+                </p>
               )}
             </div>
           )}
