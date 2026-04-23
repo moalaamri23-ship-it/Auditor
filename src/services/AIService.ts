@@ -18,6 +18,7 @@ const DEFAULTS: Record<AIProvider, string> = {
   anthropic:  'claude-sonnet-4-6',
   azure:      'gpt-4o-mini',
   openrouter: '',
+  copilot:    '',
 };
 
 function resolveModel(provider: AIProvider, modelId: string): string {
@@ -33,7 +34,13 @@ export async function testApiConnection(
   apiKey: string,
   modelId: string,
   azureEndpoint = '',
+  powerAutomateUrl = '',
 ): Promise<{ ok: boolean; message: string }> {
+  if (provider === 'copilot') {
+    if (!powerAutomateUrl.trim()) return { ok: false, message: 'Power Automate URL is required.' };
+    return { ok: true, message: 'Copilot configured via Power Automate.' };
+  }
+
   if (!apiKey.trim()) return { ok: false, message: 'No API key provided.' };
 
   const model = resolveModel(provider, modelId);
@@ -140,7 +147,12 @@ export async function callAI(
   messages: AIMessage[],
   systemPrompt?: string,
   azureEndpoint = '',
+  powerAutomateUrl = '',
 ): Promise<string> {
+  if (provider === 'copilot') {
+    return _callPowerAutomate(powerAutomateUrl, messages, systemPrompt);
+  }
+
   const model = resolveModel(provider, modelId);
 
   // ── Google Gemini ──────────────────────────────────────────────────────────
@@ -215,6 +227,35 @@ export async function callAI(
   if (!res.ok) throw new Error(`API error ${res.status}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Power Automate transport — used when provider === 'copilot'
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _callPowerAutomate(
+  url: string,
+  messages: AIMessage[],
+  systemPrompt?: string,
+): Promise<string> {
+  if (!url) throw new Error('Power Automate URL is required for Copilot provider.');
+  const parts: string[] = [];
+  if (systemPrompt) parts.push(systemPrompt);
+  for (const m of messages.filter(msg => msg.role !== 'system')) parts.push(m.content);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: crypto.randomUUID(),
+      prompt: parts.join('\n\n'),
+      responseFormat: 'text',
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Power Automate Error: ${res.statusText}${errText ? ` — ${errText}` : ''}`);
+  }
+  return res.text();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -62,7 +62,7 @@ export default function AIInsightsPanel() {
       </div>
 
       {/* ── No API key warning ── */}
-      {!aiConfig.apiKey && (
+      {!aiConfig.apiKey && aiConfig.provider !== 'copilot' && (
         <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded animate-enter">
           <Icon name="alertTriangle" className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <div>
@@ -166,7 +166,7 @@ export default function AIInsightsPanel() {
       )}
 
       {/* ── Empty state (no insights yet) ── */}
-      {!insights && !isLoading && !error && aiConfig.apiKey && (
+      {!insights && !isLoading && !error && (aiConfig.apiKey || aiConfig.provider === 'copilot') && (
         <div className="flex flex-col items-center justify-center py-16 gap-4 text-slate-400 animate-enter">
           <Icon name="wand" className="w-10 h-10" />
           <div className="text-sm text-center">

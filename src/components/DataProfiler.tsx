@@ -32,7 +32,7 @@ export default function DataProfiler() {
     setAnalysisError(null);
     cancelRef.current = { current: false };
 
-    const hasAI = !!aiConfig?.apiKey?.trim();
+    const hasAI = !!(aiConfig?.apiKey?.trim() || aiConfig?.provider === 'copilot');
 
     try {
       const results = await runAllModules({
@@ -192,7 +192,7 @@ export default function DataProfiler() {
               <>
                 <Icon name="bolt" className="w-4 h-4" />
                 Run Analysis
-                {aiConfig?.apiKey && <span className="text-[10px] font-mono opacity-70 ml-1">+ AI</span>}
+                {(aiConfig?.apiKey || aiConfig?.provider === 'copilot') && <span className="text-[10px] font-mono opacity-70 ml-1">+ AI</span>}
               </>
             )}
           </button>
@@ -230,7 +230,7 @@ export default function DataProfiler() {
           </div>
         )}
 
-        {!aiConfig?.apiKey && (
+        {!aiConfig?.apiKey && aiConfig?.provider !== 'copilot' && (
           <div className="text-xs text-amber-600 flex items-center gap-1.5">
             <Icon name="alertTriangle" className="w-3.5 h-3.5" />
             No AI key configured — analysis will run DuckDB modules only.

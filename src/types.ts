@@ -183,12 +183,13 @@ export interface Session {
 // ─────────────────────────────────────────────
 // AI
 // ─────────────────────────────────────────────
-export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'azure' | 'openrouter';
+export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'azure' | 'openrouter' | 'copilot';
 
 export interface AIConfig {
   provider: AIProvider;
   apiKey: string;
   modelId: string;
+  powerAutomateUrl?: string;
 }
 
 export interface AIFinding {

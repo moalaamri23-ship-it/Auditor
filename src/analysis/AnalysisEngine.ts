@@ -88,7 +88,7 @@ export async function runAllModules(
   };
 
   // ── AI text analysis (optional) ──────────────────────────────────────────
-  if (aiConfig?.apiKey?.trim() && scopeWOCount > 0) {
+  if ((aiConfig?.apiKey?.trim() || aiConfig?.provider === 'copilot') && scopeWOCount > 0) {
     try {
       const summary = await runAITextModule({
         sessionId,

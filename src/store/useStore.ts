@@ -17,6 +17,7 @@ export const useStore = create<AppState>()(
         provider: 'gemini',
         apiKey: '',
         modelId: 'gemini-2.0-flash',
+        powerAutomateUrl: '',
       },
 
       // ── Transient UI state (reset on load) ──────────

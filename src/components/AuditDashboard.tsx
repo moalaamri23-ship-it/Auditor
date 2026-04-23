@@ -35,7 +35,7 @@ export default function AuditDashboard() {
     if (!session) return;
     setIsRerunning(true);
     try {
-      const hasAI = !!aiConfig?.apiKey?.trim();
+      const hasAI = !!(aiConfig?.apiKey?.trim() || aiConfig?.provider === 'copilot');
       const results = await runAllModules({
         sessionId:  session.id,
         columnMap:  session.columnMap,
@@ -212,7 +212,7 @@ export default function AuditDashboard() {
 
       {/* ── AI flag summary ── */}
       {flagSummary && <AIFlagSummaryCard summary={flagSummary} onViewAll={() => setShowModules(true)} />}
-      {!flagSummary && !aiConfig?.apiKey && (
+      {!flagSummary && !aiConfig?.apiKey && aiConfig?.provider !== 'copilot' && (
         <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded text-sm text-slate-500 animate-enter">
           <Icon name="wand" className="w-5 h-5 text-slate-300" />
           <span>

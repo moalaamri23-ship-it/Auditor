@@ -187,6 +187,7 @@ export const AI_PROVIDERS = {
   anthropic:  { name: 'Anthropic Claude', defaultModel: 'claude-sonnet-4-6' },
   azure:      { name: 'Azure OpenAI',     defaultModel: '' },
   openrouter: { name: 'OpenRouter',       defaultModel: '' },
+  copilot:    { name: 'Microsoft Copilot', defaultModel: '' },
 } as const;
 
 // ─────────────────────────────────────────────

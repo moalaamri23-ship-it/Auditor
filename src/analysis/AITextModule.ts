@@ -212,6 +212,8 @@ async function _processBatch(batch: WORecord[], aiConfig: AIConfig): Promise<AIF
       aiConfig.modelId,
       [{ role: 'user', content: JSON.stringify(payload) }],
       SYSTEM_PROMPT,
+      '',
+      aiConfig.powerAutomateUrl ?? '',
     );
   } catch {
     return [];

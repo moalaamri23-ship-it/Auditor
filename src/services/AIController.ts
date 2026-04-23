@@ -165,7 +165,7 @@ export async function generateInsights(
   aiConfig: AIConfig,
 ): Promise<AIInsights> {
 
-  if (!aiConfig.apiKey?.trim()) {
+  if (!aiConfig.apiKey?.trim() && aiConfig.provider !== 'copilot') {
     throw new Error('No API key configured. Go to Settings to add your API key.');
   }
 
@@ -187,6 +187,8 @@ export async function generateInsights(
     aiConfig.modelId,
     [{ role: 'user', content: payload }],
     SYSTEM_PROMPT,
+    '',
+    aiConfig.powerAutomateUrl ?? '',
   );
 
   return parseResponse(text, results);

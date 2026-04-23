@@ -10,13 +10,14 @@ type ProviderKey = keyof typeof AI_PROVIDERS;
 
 const PROVIDER_KEYS = Object.keys(AI_PROVIDERS) as ProviderKey[];
 
-// Static fallback lists — used when live fetch hasn't run yet or provider is Azure/OpenRouter
+// Static fallback lists — used when live fetch hasn't run yet or provider is Azure/OpenRouter/Copilot
 const FALLBACK_MODELS: Record<ProviderKey, string[]> = {
   gemini:     ['gemini-2.0-flash', 'gemini-2.5-pro-preview', 'gemini-1.5-pro', 'gemini-1.5-flash'],
   openai:     ['gpt-4o-mini', 'gpt-4o', 'o3-mini'],
   anthropic:  ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5-20251001'],
   azure:      [],
   openrouter: ['openai/gpt-4o', 'anthropic/claude-sonnet-4-6', 'google/gemini-2.0-flash', 'meta-llama/llama-3.3-70b-instruct'],
+  copilot:    [],
 };
 
 const FETCHABLE = new Set(['gemini', 'openai', 'anthropic']);
@@ -31,7 +32,8 @@ export default function SettingsScreen() {
   const [localProvider,  setLocalProvider]  = useState<ProviderKey>(aiConfig.provider as ProviderKey);
   const [localKey,       setLocalKey]       = useState(aiConfig.apiKey);
   const [localModelId,   setLocalModelId]   = useState(aiConfig.modelId);
-  const [localEndpoint,  setLocalEndpoint]  = useState('');
+  const [localEndpoint,          setLocalEndpoint]          = useState('');
+  const [localPowerAutomateUrl,  setLocalPowerAutomateUrl]  = useState(aiConfig.powerAutomateUrl ?? '');
 
   const [testStatus,  setTestStatus]  = useState<TestStatus>(null);
   const [testMessage, setTestMessage] = useState('');
@@ -64,9 +66,17 @@ export default function SettingsScreen() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateAIConfig({ provider: localProvider, apiKey: localKey, modelId: localModelId });
+    updateAIConfig({ provider: localProvider, apiKey: localKey, modelId: localModelId, powerAutomateUrl: localPowerAutomateUrl });
     setTestStatus(null);
     setTestMessage('');
+
+    if (localProvider === 'copilot') {
+      if (localPowerAutomateUrl.trim()) {
+        setTestStatus('ok');
+        setTestMessage('Copilot configuration saved.');
+      }
+      return;
+    }
 
     if (localKey.trim()) {
       setTestStatus('testing');
@@ -125,7 +135,7 @@ export default function SettingsScreen() {
           </div>
 
           {/* Model selector */}
-          {localProvider !== 'azure' && (
+          {localProvider !== 'azure' && localProvider !== 'copilot' && (
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-semibold text-slate-500">
@@ -159,6 +169,13 @@ export default function SettingsScreen() {
             </div>
           )}
 
+          {/* Copilot — info text instead of model selector */}
+          {localProvider === 'copilot' && (
+            <p className="text-xs text-slate-400">
+              Model selection is managed by Copilot Studio. No model ID is required here.
+            </p>
+          )}
+
           {/* Azure — deployment name + endpoint */}
           {localProvider === 'azure' && (
             <div className="animate-enter space-y-3">
@@ -186,7 +203,23 @@ export default function SettingsScreen() {
             </div>
           )}
 
-          {/* API Key */}
+          {/* Copilot — Power Automate URL */}
+          {localProvider === 'copilot' && (
+            <div className="animate-enter">
+              <label className="text-xs font-semibold text-slate-500 mb-1 block">Power Automate URL</label>
+              <input
+                type="url"
+                value={localPowerAutomateUrl}
+                onChange={e => { setLocalPowerAutomateUrl(e.target.value); setTestStatus(null); }}
+                placeholder="https://prod-xx.westus.logic.azure.com/workflows/..."
+                className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
+              />
+              <p className="mt-1 text-xs text-slate-400 italic">HTTP trigger URL from your Power Automate flow. Stored in your browser's local storage only.</p>
+            </div>
+          )}
+
+          {/* API Key — hidden for Copilot */}
+          {localProvider !== 'copilot' && (
           <div>
             <label className="text-xs font-semibold text-slate-500 mb-1 block">API Key</label>
             <input
@@ -199,6 +232,7 @@ export default function SettingsScreen() {
             />
             <p className="mt-1 text-xs text-slate-400 italic">Stored in your browser's local storage only.</p>
           </div>
+          )}
 
           {/* Test result */}
           {testStatus && (
