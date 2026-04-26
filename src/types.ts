@@ -138,18 +138,14 @@ export interface AnalysisFilters {
   workCenter: string[];
   functionalLocation: string[];
   failureCatalog: string[];
-  objectPart: string[];
-  damage: string[];
-  cause: string[];
+  equipment: string[];
 }
 
 export interface FilterOptions {
   workCenter: string[];
   functionalLocation: string[];
   failureCatalog: string[];
-  objectPart: string[];
-  damage: string[];
-  cause: string[];
+  equipment: string[];
   dateMin: string | null;
   dateMax: string | null;
 }
@@ -160,9 +156,7 @@ export const EMPTY_FILTERS: AnalysisFilters = {
   workCenter: [],
   functionalLocation: [],
   failureCatalog: [],
-  objectPart: [],
-  damage: [],
-  cause: [],
+  equipment: [],
 };
 
 export interface AuditRun {
@@ -279,6 +273,7 @@ export interface AIFlagSummary {
 // ─────────────────────────────────────────────
 export type Screen =
   | 'projects'        // dashboard listing all audit projects
+  | 'project-home'    // run list for an active project
   | 'audit-init'      // wizard: name, type, period, bank
   | 'upload'
   | 'schema-mapper'

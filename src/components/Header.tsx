@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Icon from './Icon';
 import { useStore, useActiveProject, useActiveRun, useRunsForProject } from '../store/useStore';
-import type { Screen } from '../types';
+import type { RunStage, Screen } from '../types';
 
 interface Tab {
   id: Screen;
@@ -21,8 +21,12 @@ const GLOBAL_TABS: Tab[] = [
   { id: 'settings', label: 'Settings' },
 ];
 
+const VISIBLE_STAGES: ReadonlySet<RunStage> = new Set<RunStage>([
+  'profiled', 'pre-checked', 'analysed',
+]);
+
 export default function Header({ dbReady }: { dbReady: boolean }) {
-  const { currentScreen, setScreen, setActiveProject, setActiveRun, setLoading } = useStore();
+  const { currentScreen, setScreen, setActiveProject, setActiveRun, setLoading, deleteRun } = useStore();
   const project = useActiveProject();
   const run = useActiveRun();
   const projectRuns = useRunsForProject(project?.id ?? null);
@@ -36,7 +40,18 @@ export default function Header({ dbReady }: { dbReady: boolean }) {
     setLoading(false);
   };
 
-  const tabs = run && run.hasDataInDB
+  const handleDeleteRun = (e: React.MouseEvent, runId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this run and all its results?')) return;
+    deleteRun(runId);
+    setRunMenuOpen(false);
+    if (run?.id === runId) {
+      setActiveRun(null);
+      setScreen('project-home');
+    }
+  };
+
+  const tabs = run && VISIBLE_STAGES.has(run.stage)
     ? [...GLOBAL_TABS, ...PROJECT_TABS]
     : GLOBAL_TABS;
 
@@ -66,22 +81,35 @@ export default function Header({ dbReady }: { dbReady: boolean }) {
               <Icon name="chevronDown" className="w-3 h-3 text-slate-400" />
             </button>
             {runMenuOpen && projectRuns.length > 0 && (
-              <div className="absolute top-full left-0 mt-1 bg-slate-900 border border-slate-700 rounded shadow-xl min-w-[200px] z-50">
+              <div className="absolute top-full left-0 mt-1 bg-slate-900 border border-slate-700 rounded shadow-xl min-w-[220px] z-50">
                 {projectRuns.map((r) => (
-                  <button
+                  <div
                     key={r.id}
-                    onClick={() => {
-                      setActiveRun(r.id);
-                      setRunMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 ${
-                      r.id === run.id ? 'bg-brand-600/20 text-white' : 'text-slate-300 hover:bg-slate-800'
+                    className={`flex items-center group ${
+                      r.id === run.id ? 'bg-brand-600/20' : 'hover:bg-slate-800'
                     }`}
                   >
-                    <span className="font-mono text-slate-500 w-6">#{r.runIndex}</span>
-                    <span className="flex-1">{r.periodLabel}</span>
-                    {r.id === run.id && <Icon name="check" className="w-3 h-3 text-brand-400" />}
-                  </button>
+                    <button
+                      onClick={() => {
+                        setActiveRun(r.id);
+                        setRunMenuOpen(false);
+                      }}
+                      className="flex-1 text-left px-3 py-2 text-xs flex items-center gap-2"
+                    >
+                      <span className="font-mono text-slate-500 w-6">#{r.runIndex}</span>
+                      <span className={`flex-1 ${r.id === run.id ? 'text-white' : 'text-slate-300'}`}>
+                        {r.periodLabel}
+                      </span>
+                      {r.id === run.id && <Icon name="check" className="w-3 h-3 text-brand-400" />}
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteRun(e, r.id)}
+                      className="p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition shrink-0"
+                      title="Delete run"
+                    >
+                      <Icon name="trash" className="w-3 h-3" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}

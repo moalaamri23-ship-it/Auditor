@@ -78,15 +78,20 @@ export async function runRuleChecks(opts: RuleCheckOptions): Promise<RuleCheckRe
     perCheck['missing_confirmation'] = { matched: 0, sampleWOs: [] };
   }
 
-  // 2. Not Listed codes (any of the 3 description-form code columns)
-  const notListedExpr = (col: string) =>
-    `(${col} IS NOT NULL AND UPPER(TRIM(${col})) LIKE 'NOT LISTED%')`;
-  const notListedConditions: string[] = [];
-  if (has('object_part_code_description')) notListedConditions.push(notListedExpr('object_part_code_description'));
-  if (has('damage_code_description')) notListedConditions.push(notListedExpr('damage_code_description'));
-  if (has('cause_code_description')) notListedConditions.push(notListedExpr('cause_code_description'));
-  if (notListedConditions.length > 0) {
-    await runCheck('not_listed_codes', woCol, notListedConditions.join(' OR '));
+  // 2. Not Listed codes — only meaningful when a failure catalog is loaded so the AI can
+  //    suggest correct codes. Without catalog data there is no reference to compare against.
+  if (catalogAvailable) {
+    const notListedExpr = (col: string) =>
+      `(${col} IS NOT NULL AND UPPER(TRIM(${col})) LIKE 'NOT LISTED%')`;
+    const notListedConditions: string[] = [];
+    if (has('object_part_code_description')) notListedConditions.push(notListedExpr('object_part_code_description'));
+    if (has('damage_code_description')) notListedConditions.push(notListedExpr('damage_code_description'));
+    if (has('cause_code_description')) notListedConditions.push(notListedExpr('cause_code_description'));
+    if (notListedConditions.length > 0) {
+      await runCheck('not_listed_codes', woCol, notListedConditions.join(' OR '));
+    } else {
+      perCheck['not_listed_codes'] = { matched: 0, sampleWOs: [] };
+    }
   } else {
     perCheck['not_listed_codes'] = { matched: 0, sampleWOs: [] };
   }

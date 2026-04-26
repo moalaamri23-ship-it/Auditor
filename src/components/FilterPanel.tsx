@@ -26,9 +26,7 @@ export default function FilterPanel({
     (filters.workCenter.length > 0 ? 1 : 0) +
     (filters.functionalLocation.length > 0 ? 1 : 0) +
     (filters.failureCatalog.length > 0 ? 1 : 0) +
-    (filters.objectPart.length > 0 ? 1 : 0) +
-    (filters.damage.length > 0 ? 1 : 0) +
-    (filters.cause.length > 0 ? 1 : 0);
+    (filters.equipment.length > 0 ? 1 : 0);
 
   const set = (patch: Partial<AnalysisFilters>) => onChange({ ...filters, ...patch });
 
@@ -66,9 +64,7 @@ export default function FilterPanel({
                   workCenter: [],
                   functionalLocation: [],
                   failureCatalog: [],
-                  objectPart: [],
-                  damage: [],
-                  cause: [],
+                  equipment: [],
                 })
               }
               className="text-xs text-slate-400 hover:text-red-500 transition font-bold"
@@ -110,15 +106,6 @@ export default function FilterPanel({
           />
         )}
 
-        {has('functional_location') && options.functionalLocation.length > 0 && (
-          <MultiSelect
-            label="Func. Location"
-            options={options.functionalLocation}
-            selected={filters.functionalLocation}
-            onChange={(v) => set({ functionalLocation: v })}
-          />
-        )}
-
         {has('failure_catalog_desc') && options.failureCatalog.length > 0 && (
           <MultiSelect
             label="Catalog"
@@ -128,30 +115,21 @@ export default function FilterPanel({
           />
         )}
 
-        {has('object_part_code_description') && options.objectPart.length > 0 && (
+        {has('functional_location') && options.functionalLocation.length > 0 && (
           <MultiSelect
-            label="Object Part"
-            options={options.objectPart}
-            selected={filters.objectPart}
-            onChange={(v) => set({ objectPart: v })}
+            label="Func. Location"
+            options={options.functionalLocation}
+            selected={filters.functionalLocation}
+            onChange={(v) => set({ functionalLocation: v })}
           />
         )}
 
-        {has('damage_code_description') && options.damage.length > 0 && (
+        {(has('equipment_description') || has('equipment')) && options.equipment.length > 0 && (
           <MultiSelect
-            label="Damage"
-            options={options.damage}
-            selected={filters.damage}
-            onChange={(v) => set({ damage: v })}
-          />
-        )}
-
-        {has('cause_code_description') && options.cause.length > 0 && (
-          <MultiSelect
-            label="Cause"
-            options={options.cause}
-            selected={filters.cause}
-            onChange={(v) => set({ cause: v })}
+            label="Equipment"
+            options={options.equipment}
+            selected={filters.equipment}
+            onChange={(v) => set({ equipment: v })}
           />
         )}
       </div>

@@ -257,11 +257,12 @@ export default function AuditDashboard() {
       <div className="flex flex-wrap gap-3 items-center">
         <button
           onClick={rerun}
-          disabled={isRerunning}
+          disabled={isRerunning || !run.hasDataInDB}
+          title={!run.hasDataInDB ? 'Re-upload the file to re-run analysis' : undefined}
           className="bg-slate-900 text-white px-5 py-2 rounded text-sm font-bold flex items-center gap-2 hover:bg-slate-800 transition disabled:opacity-50"
         >
           {isRerunning ? <Icon name="loader" className="w-4 h-4 animate-spin" /> : <Icon name="refresh" className="w-4 h-4" />}
-          Re-run with filters
+          {run.hasDataInDB ? 'Re-run with filters' : 'Re-upload to re-run'}
         </button>
         {error && <div className="text-xs text-red-600">{error}</div>}
         {isRerunning && aiProgress.total > 0 && (

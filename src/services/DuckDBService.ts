@@ -99,7 +99,17 @@ async function _createTypedTable(columnMap: ColumnMap): Promise<void> {
     if (!columnMap[canonical]) continue;
 
     if (TIMESTAMP_COLUMNS.includes(canonical)) {
-      selects.push(`TRY_CAST("${canonical}" AS DATE) AS ${canonical}`);
+      // Try ISO, US (M/D/YYYY), European (D/M/YYYY), dot (D.M.YYYY), and Excel serial numbers
+      selects.push(`COALESCE(
+        TRY_CAST("${canonical}" AS DATE),
+        TRY_STRPTIME(TRIM("${canonical}"::VARCHAR), '%m/%d/%Y'),
+        TRY_STRPTIME(TRIM("${canonical}"::VARCHAR), '%d/%m/%Y'),
+        TRY_STRPTIME(TRIM("${canonical}"::VARCHAR), '%d.%m.%Y'),
+        TRY_STRPTIME(TRIM("${canonical}"::VARCHAR), '%Y/%m/%d'),
+        CASE WHEN regexp_matches("${canonical}"::VARCHAR, '^\\d{4,5}$')
+          THEN (DATE '1899-12-30' + CAST("${canonical}"::VARCHAR AS INTEGER) * INTERVAL '1 day')::DATE
+        END
+      ) AS ${canonical}`);
     } else {
       selects.push(`TRIM(CAST(COALESCE("${canonical}", '') AS VARCHAR)) AS ${canonical}`);
     }
@@ -455,14 +465,14 @@ export async function getFilterOptions(columnMap: ColumnMap): Promise<FilterOpti
     }
   };
 
-  const [workCenter, functionalLocation, failureCatalog, objectPart, damage, cause] =
+  const equipCol = columnMap.equipment_description ? 'equipment_description' : 'equipment';
+
+  const [workCenter, functionalLocation, failureCatalog, equipment] =
     await Promise.all([
       distinct('work_center'),
       distinct('functional_location'),
       distinct('failure_catalog_desc'),
-      distinct('object_part_code_description'),
-      distinct('damage_code_description'),
-      distinct('cause_code_description'),
+      columnMap.equipment_description || columnMap.equipment ? distinct(equipCol) : Promise.resolve([]),
     ]);
 
   let dateMin: string | null = null;
@@ -481,7 +491,7 @@ export async function getFilterOptions(columnMap: ColumnMap): Promise<FilterOpti
     } catch { /* ignore */ }
   }
 
-  return { workCenter, functionalLocation, failureCatalog, objectPart, damage, cause, dateMin, dateMax };
+  return { workCenter, functionalLocation, failureCatalog, equipment, dateMin, dateMax };
 }
 
 /**
@@ -517,9 +527,11 @@ export async function createAnalysisScopeView(
   inList('work_center', filters.workCenter);
   inList('functional_location', filters.functionalLocation);
   inList('failure_catalog_desc', filters.failureCatalog);
-  inList('object_part_code_description', filters.objectPart);
-  inList('damage_code_description', filters.damage);
-  inList('cause_code_description', filters.cause);
+  // Equipment filter: prefer equipment_description if mapped, fall back to equipment
+  if (filters.equipment.length > 0) {
+    const equipCol = has('equipment_description') ? 'equipment_description' : has('equipment') ? 'equipment' : null;
+    if (equipCol) inList(equipCol, filters.equipment);
+  }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   await _conn.query(`

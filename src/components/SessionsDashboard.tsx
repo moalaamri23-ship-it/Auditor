@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import Icon from './Icon';
-import { useStore, useRunsForProject, hasArchivedV1Data } from '../store/useStore';
-import type { AuditProject, AuditRun } from '../types';
+import { useStore, useRunsForProject } from '../store/useStore';
+import type { AuditProject } from '../types';
 
 export default function ProjectsDashboard() {
   const { projects, setScreen, setActiveProject, setActiveRun, deleteProject } = useStore();
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
 
   const openProject = (project: AuditProject) => {
     setActiveProject(project.id);
@@ -14,7 +13,7 @@ export default function ProjectsDashboard() {
     if (project.runIds.length === 0) {
       setScreen('upload');
     } else {
-      setScreen('upload');
+      setScreen('project-home');
     }
   };
 
@@ -22,8 +21,6 @@ export default function ProjectsDashboard() {
     e.stopPropagation();
     setConfirmDelete({ id: p.id, name: p.name });
   };
-
-  const archived = hasArchivedV1Data();
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -34,14 +31,6 @@ export default function ProjectsDashboard() {
             Each project groups multiple audit runs across periods so you can track improvement over time.
           </p>
         </div>
-        {archived && (
-          <button
-            onClick={() => setShowArchived(true)}
-            className="text-xs font-bold text-slate-500 hover:text-brand-600 underline"
-          >
-            View archived sessions
-          </button>
-        )}
       </div>
 
       <div className="grid md:grid-cols-3 gap-5">
@@ -102,7 +91,6 @@ export default function ProjectsDashboard() {
         </div>
       )}
 
-      {showArchived && <ArchivedV1Modal onClose={() => setShowArchived(false)} />}
     </div>
   );
 }
@@ -210,59 +198,3 @@ function formatDate(iso: string): string {
   });
 }
 
-// ─── Archived v1 modal ───────────────────────────────────────────────────────
-
-function ArchivedV1Modal({ onClose }: { onClose: () => void }) {
-  let sessions: Array<{ name: string; fileName: string; uploadedAt: string }> = [];
-  try {
-    const raw = localStorage.getItem('sap-auditor-v1');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      sessions = (parsed?.state?.sessions ?? []).map((s: any) => ({
-        name: String(s?.name ?? 'Untitled'),
-        fileName: String(s?.fileName ?? ''),
-        uploadedAt: String(s?.uploadedAt ?? ''),
-      }));
-    }
-  } catch { /* ignore */ }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 grid place-items-center"
-      onMouseDown={onClose}
-    >
-      <div
-        className="bg-white rounded-xl p-6 w-[92vw] max-w-lg border shadow-xl animate-enter"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="font-bold text-slate-900 mb-2">Archived sessions (v1)</div>
-        <p className="text-sm text-slate-500 mb-4">
-          These sessions were created before the redesign. They are read-only — the new schema and
-          project model are not backwards-compatible. To audit the same data again, create a new
-          Audit Project and re-upload.
-        </p>
-        {sessions.length === 0 ? (
-          <p className="text-sm text-slate-400">No archived sessions found.</p>
-        ) : (
-          <ul className="max-h-72 overflow-auto scroll-thin border border-slate-200 rounded divide-y divide-slate-100">
-            {sessions.map((s, i) => (
-              <li key={i} className="px-3 py-2 text-sm">
-                <div className="font-semibold text-slate-700">{s.name}</div>
-                <div className="text-xs text-slate-400 font-mono">{s.fileName}</div>
-                <div className="text-xs text-slate-400">{formatDate(s.uploadedAt)}</div>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="flex justify-end mt-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

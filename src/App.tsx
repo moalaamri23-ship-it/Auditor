@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Header from './components/Header';
 import ProjectsDashboard from './components/SessionsDashboard';
+import ProjectHomeView from './components/ProjectHomeView';
 import AuditInitWizard from './components/AuditInitWizard';
 import UploadZone from './components/UploadZone';
 import SchemaMapper from './components/SchemaMapper';
@@ -88,6 +89,7 @@ export default function App() {
         {dbState === 'ready' && (
           <>
             {currentScreen === 'projects' && <ProjectsDashboard />}
+            {currentScreen === 'project-home' && <ProjectHomeView />}
             {currentScreen === 'audit-init' && <AuditInitWizard />}
             {currentScreen === 'upload' && <UploadZone />}
             {currentScreen === 'schema-mapper' && <SchemaMapper />}

@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import Icon from './Icon';
-import { useStore, useActiveRun } from '../store/useStore';
+import { useStore, useActiveRun, useRunsForProject } from '../store/useStore';
 import { ParsedDataCache } from '../services/ParsedDataCache';
-import { loadData, runProfiling, restoreAIFlagsFromRun } from '../services/DuckDBService';
+import { loadData, runProfiling, restoreAIFlagsFromRun, query } from '../services/DuckDBService';
 import { ensureCatalogLoaded } from '../services/FailureCatalogService';
-import type { CanonicalColumn, ColumnMap } from '../types';
+import type { AuditPeriod, CanonicalColumn, ColumnMap, DataProfile, AnalysisFilters } from '../types';
+import { EMPTY_FILTERS } from '../types';
 import {
   COLUMN_LABELS,
   IDENTIFIER_COLUMNS,
@@ -29,9 +30,52 @@ const COLUMN_GROUPS: { label: string; cols: CanonicalColumn[] }[] = [
 
 type LoadStage = 'idle' | 'loading' | 'profiling' | 'done' | 'error';
 
+const PERIOD_DAYS: Record<AuditPeriod, number> = {
+  WEEKLY: 7,
+  BIWEEKLY: 14,
+  QUARTERLY: 91,
+  YEARLY: 365,
+};
+
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(isoDate);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function computeAutoFilters(
+  profile: DataProfile,
+  columnMap: ColumnMap,
+  prevDateMax: string | null,
+  period: AuditPeriod,
+): Promise<AnalysisFilters | null> {
+  if (!columnMap.notification_date) return null;
+
+  if (prevDateMax) {
+    const candidateFrom = addDays(prevDateMax, 1);
+    try {
+      const [row] = await query(
+        `SELECT COUNT(*) AS cnt FROM audit WHERE notification_date >= '${candidateFrom}'::DATE`
+      );
+      if (Number(row?.cnt ?? 0) > 0) {
+        return { ...EMPTY_FILTERS, dateFrom: candidateFrom, dateTo: null };
+      }
+    } catch { /* fall through */ }
+  }
+
+  // Fall back to last <period> of new data
+  if (profile.dateRange?.max) {
+    const dateFrom = addDays(profile.dateRange.max, -PERIOD_DAYS[period]);
+    return { ...EMPTY_FILTERS, dateFrom, dateTo: profile.dateRange.max };
+  }
+
+  return null;
+}
+
 export default function SchemaMapper() {
   const run = useActiveRun();
-  const { updateRun, setScreen } = useStore();
+  const { updateRun, setScreen, projects } = useStore();
+  const projectRuns = useRunsForProject(run?.projectId ?? null);
 
   const [localMap, setLocalMap] = useState<ColumnMap>(run?.columnMap ?? {});
   const [loadStage, setLoadStage] = useState<LoadStage>('idle');
@@ -77,11 +121,32 @@ export default function SchemaMapper() {
       setLoadStage('profiling');
       const profile = await runProfiling(localMap);
 
+      // Auto-compute date filters based on previous run (Issue 9)
+      const project = projects.find((p) => p.id === run.projectId);
+      const prevRun = projectRuns
+        .filter((r) => r.id !== run.id && r.stage === 'analysed' && r.dataProfile?.dateRange)
+        .sort((a, b) => b.runIndex - a.runIndex)[0] ?? null;
+
+      let autoFilters: AnalysisFilters | null = null;
+      if (project && prevRun?.dataProfile?.dateRange) {
+        autoFilters = await computeAutoFilters(
+          profile,
+          localMap,
+          prevRun.dataProfile.dateRange.max,
+          project.period,
+        ).catch(() => null);
+      } else if (project && !prevRun && profile.dateRange?.max) {
+        // First run of a periodic project — default to last period of data
+        const dateFrom = addDays(profile.dateRange.max, -PERIOD_DAYS[project.period]);
+        autoFilters = { ...EMPTY_FILTERS, dateFrom, dateTo: profile.dateRange.max };
+      }
+
       updateRun(run.id, {
         dataProfile: profile,
         stage: 'profiled',
         hasDataInDB: true,
         lastAnalysedAt: new Date().toISOString(),
+        ...(autoFilters ? { analysisFilters: autoFilters } : {}),
       });
 
       ParsedDataCache.clear();
@@ -92,7 +157,7 @@ export default function SchemaMapper() {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to load data into the Database.');
       setLoadStage('error');
     }
-  }, [cachedData, localMap, run.id, run.aiFlags, updateRun, setScreen]);
+  }, [cachedData, localMap, run.id, run.projectId, run.aiFlags, projects, projectRuns, updateRun, setScreen]);
 
   const mappedCount = Object.values(localMap).filter(Boolean).length;
   const totalCols = Object.keys(COLUMN_LABELS).length;
