@@ -27,19 +27,22 @@ function scoreMatch(rawHeader: string, keywords: string[]): number {
     if (norm === kwNorm) {
       best = Math.max(best, 100);
     } else if (norm.includes(kwNorm) || kwNorm.includes(norm)) {
-      best = Math.max(best, 70);
+      // Penalize very short keyword that's just a prefix substring of the header
+      const shorter = Math.min(norm.length, kwNorm.length);
+      const longer = Math.max(norm.length, kwNorm.length);
+      const ratio = shorter / longer;
+      best = Math.max(best, Math.round(40 + ratio * 30));
     } else {
-      // Word-level overlap
       const rawWords = norm.split('_').filter(Boolean);
-      const kwWords  = kwNorm.split('_').filter(Boolean);
-      const overlap  = rawWords.filter((w) => kwWords.includes(w)).length;
+      const kwWords = kwNorm.split('_').filter(Boolean);
+      const overlap = rawWords.filter((w) => kwWords.includes(w)).length;
       if (overlap > 0) {
         const ratio = overlap / Math.max(rawWords.length, kwWords.length);
         best = Math.max(best, Math.round(ratio * 60));
       }
     }
 
-    if (best === 100) break; // can't do better
+    if (best === 100) break;
   }
 
   return best;
@@ -50,22 +53,28 @@ export function detectColumns(headers: string[]): SchemaDetectionResult {
   const candidates: MappingCandidate[] = [];
   const usedHeaders = new Set<string>();
 
-  // Score every canonical column against every header, pick best unused match
-  const entries = Object.entries(SAP_COLUMN_KEYWORDS) as [CanonicalColumn, string[]][];
-
-  // Sort: put higher-priority (required) columns first so they claim headers first
+  // Specific (multi-word) descriptions claim headers before generic ones,
+  // so e.g. "Equipment_Description" wins over "Equipment".
   const PRIORITY_ORDER: CanonicalColumn[] = [
     'work_order_number',
-    'notification_number',
+    'notification_date',
+    'work_order_description',
+    'equipment_description',
+    'functional_location_description',
+    'object_part_code_description',
+    'damage_code_description',
+    'cause_code_description',
+    'failure_catalog_desc',
+    'work_center',
+    'operation_description',
+    'confirmation_long_text',
+    'confirmation_text',
+    'code_group',
     'equipment',
     'functional_location',
-    'actual_start_date',
-    'actual_finish_date',
-    'notification_date',
-    'confirmation_text',
-    'work_order_description',
   ];
 
+  const entries = Object.entries(SAP_COLUMN_KEYWORDS) as [CanonicalColumn, string[]][];
   const sortedEntries = [...entries].sort(([a], [b]) => {
     const ai = PRIORITY_ORDER.indexOf(a);
     const bi = PRIORITY_ORDER.indexOf(b);
@@ -77,13 +86,13 @@ export function detectColumns(headers: string[]): SchemaDetectionResult {
 
   for (const [canonical, keywords] of sortedEntries) {
     let bestHeader = '';
-    let bestScore  = 0;
+    let bestScore = 0;
 
     for (const header of headers) {
       if (usedHeaders.has(header)) continue;
       const score = scoreMatch(header, keywords);
       if (score > bestScore) {
-        bestScore  = score;
+        bestScore = score;
         bestHeader = header;
       }
     }
@@ -93,9 +102,9 @@ export function detectColumns(headers: string[]): SchemaDetectionResult {
       usedHeaders.add(bestHeader);
       candidates.push({
         canonicalName: canonical,
-        rawName:       bestHeader,
-        score:         bestScore,
-        confidence:    bestScore >= 80 ? 'HIGH' : bestScore >= 55 ? 'MEDIUM' : 'LOW',
+        rawName: bestHeader,
+        score: bestScore,
+        confidence: bestScore >= 80 ? 'HIGH' : bestScore >= 55 ? 'MEDIUM' : 'LOW',
       });
     }
   }

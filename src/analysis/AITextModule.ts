@@ -1,278 +1,316 @@
-/**
- * AI Text Analysis Module — Triangle Check
- *
- * SAP PM records contain three artefacts written by different people at
- * different times:
- *
- *   SYMPTOM        — WO/notification description (operator, at notification)
- *   CLASSIFICATION — Reliability codes: failure mode, cause code, RC1/2/3
- *                    (technician/planner, at closure)
- *   CLOSURE        — Confirmation text short + long (technician, at closure)
- *
- * This module checks all three pairwise relationships (clashes) plus the
- * individual quality of each artefact:
- *
- *   symptom_code_conflict     — SYMPTOM ↔ CLASSIFICATION clash
- *   symptom_closure_conflict  — SYMPTOM ↔ CLOSURE clash
- *   code_closure_conflict     — CLASSIFICATION ↔ CLOSURE clash
- *   incomplete_classification — CLASSIFICATION quality (missing codes)
- *   poor_closure              — CLOSURE quality (vague/generic)
- *   generic_symptom           — SYMPTOM quality (too generic to audit)
- *
- * Each flag carries snapshots of the relevant artefacts for side-by-side
- * display in the UI without a DuckDB round-trip.
- */
-
 import { query, createAIFlagsTable, insertAIFlagsBatch } from '../services/DuckDBService';
 import { callAI } from '../services/AIService';
-import type { ColumnMap, AIFlag, AIFlagSummary, FlagCategory, AIConfig } from '../types';
+import type {
+  ColumnMap, AIFlag, AIFlagSummary, FlagCategory, AIConfig,
+} from '../types';
 
 const BATCH_SIZE = 20;
+const MAX_CATALOG_BRANCH_ROWS = 40; // cap per-WO catalog hint to keep prompts compact
 
-// ─── System prompt ────────────────────────────────────────────────────────────
+// ─── Flag categories (must match types.ts FlagCategory union) ───────────────
+const VALID_CATEGORIES: ReadonlySet<string> = new Set<FlagCategory>([
+  'desc_code_conflict',
+  'false_not_listed',
+  'desc_confirmation_mismatch',
+  'desc_code_confirmation_misalign',
+  'generic_description',
+  'generic_confirmation',
+]);
 
-const SYSTEM_PROMPT = `You are a SAP PM data quality auditor. You review maintenance work order records and detect documentation quality issues.
+const VALID_SEVERITIES = new Set(['HIGH', 'MEDIUM', 'LOW']);
 
-Each SAP PM work order has three artefacts:
-1. SYMPTOM — the WO/notification description written by the OPERATOR at the time they raised the notification. It describes what was observed (the symptom).
-2. CLASSIFICATION — reliability codes assigned by the TECHNICIAN when closing the WO: failure mode code (fm), cause code (cc), reliability codes (rc1, rc2, rc3). These classify what actually failed and why.
-3. CLOSURE — confirmation text written by the TECHNICIAN when closing: short confirmation (conf) and long confirmation (conf_long). This narrates what was found and done.
+// ─── System prompt ──────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are a SAP PM data quality auditor. You audit maintenance work order records for documentation alignment and reliability-coding discipline.
 
-Your task: perform a triangle check — examine all three pairwise relationships and individual artefact quality.
+Each work order has four artefacts:
+1. DESCRIPTION   — what the operator reported (work_order_description).
+2. CODES         — the reliability classification: object_part, damage_code, cause_code (description form). The failure_catalog defines which codes are valid.
+3. CONFIRMATION  — what the technician wrote when closing: short text + long text.
+4. CATALOG_HINT  — for the equipment's failure catalog group, the valid (object_part → damage → cause) tuples. Use this to detect "False Not Listed".
 
-FLAG CATEGORIES (use exactly these identifiers):
+Detect inconsistencies and classify them. Use these category ids verbatim:
 
-CLASH CHECKS (two artefacts contradict each other):
-- symptom_code_conflict: The symptom description and the assigned codes are inconsistent. e.g., symptom says "bearing noise" but failure mode = CORROSION; or symptom says "routine greasing" but breakdown indicator is coded as failure.
-- symptom_closure_conflict: The symptom description and the closure confirmation describe different things. e.g., symptom says "pump leaking at seal" but confirmation says "replaced motor bearings on compressor".
-- code_closure_conflict: The classification codes and the closure confirmation are inconsistent. e.g., cause code = CORROSION but confirmation text says "replaced worn bearings due to fatigue".
-
-QUALITY CHECKS (individual artefact is poor quality):
-- incomplete_classification: Failure mode, cause code, and all reliability codes are blank or missing, but the symptom description clearly implies what they should be. Only flag if the description is specific enough to expect codes.
-- poor_closure: The confirmation text (short and/or long) is too vague, too short, or clearly copy-pasted. Examples: "work done", "completed as per procedure", "PM carried out", single-word confirmations, or text identical to the WO description with nothing added.
-- generic_symptom: The WO description is so generic it cannot be cross-checked with codes or closure. Examples: "Maintenance work", "PM job", "Repair equipment", "As per schedule". Note: if generic_symptom is raised, clash checks for that WO are unreliable — the other flags may not apply.
+- desc_code_conflict
+   The DESCRIPTION clearly identifies a component or failure mode, but the CODES name something different (e.g. description says "bearing noise" but damage_code = "Plugged/Choked").
+- false_not_listed
+   CODES contain "Not Listed" / "Not Listed(Description Must Be Provided)" but DESCRIPTION or CONFIRMATION clearly imply a known catalog entry. When raising this, propose a likely correct (object_part, damage, cause) tuple from CATALOG_HINT.
+- desc_confirmation_mismatch
+   DESCRIPTION asks for one thing but CONFIRMATION reports a different scope of work (e.g. description says "replace pump seal", confirmation says "painted enclosure").
+- desc_code_confirmation_misalign
+   All three of DESCRIPTION, CODES, CONFIRMATION contradict each other.
+- generic_description
+   DESCRIPTION is too vague to be useful: "PM job", "Repair", "Maintenance", "Check equipment", or essentially blank. When this fires, the other clash checks for the same WO are unreliable.
+- generic_confirmation
+   CONFIRMATION provides no useful information beyond restating the description: "work done", "completed", "OK", or copy-pasted description.
 
 RULES:
-- A single WO can have multiple flags from different categories.
-- Only flag real issues. Do not flag records that look correct.
-- Be specific: reference actual words from the text in your comment.
-- Keep comments under 150 characters.
-- Return ONLY a valid JSON array. No prose, no markdown fences.
-- If there are no issues, return: []
+- One WO can have multiple flags from different categories.
+- Only flag real issues. Records that look correct → return nothing for that WO.
+- Be specific in the comment: quote actual words from the text.
+- Keep the comment under 150 characters.
+- Return ONLY a JSON array — no prose, no markdown fences. If nothing is wrong return [].
 
-OUTPUT FORMAT:
-[
-  {"wo": "WO_NUMBER", "cat": "category_id", "sev": "HIGH|MEDIUM|LOW", "cmt": "specific comment referencing actual text"}
-]
+OUTPUT FORMAT — each item:
+{"wo": "WO_NUMBER", "cat": "category_id", "sev": "HIGH|MEDIUM|LOW", "cmt": "specific comment quoting actual text", "suggested": {"part": "...", "damage": "...", "cause": "..."}}
+
+The "suggested" object is REQUIRED only when cat = "false_not_listed", and the values MUST come from CATALOG_HINT for that WO. Omit the field for other categories.
 
 SEVERITY GUIDE:
-- HIGH: Clear, direct contradiction between artefacts, or completely empty classification with specific symptom
-- MEDIUM: Partial mismatch, ambiguous alignment, or confirmation that adds no information beyond the WO description
-- LOW: Minor inconsistency, possible but uncertain mismatch, or borderline generic text`;
+- HIGH: clear, direct contradiction, or completely missing classification despite a specific description
+- MEDIUM: partial mismatch, ambiguous alignment, or confirmation that adds no information
+- LOW: minor inconsistency, possible but uncertain mismatch, or borderline-generic text`;
 
-// ─── WO record sent to AI ─────────────────────────────────────────────────────
-
+// ─── WO record sent to AI ───────────────────────────────────────────────────
 interface WORecord {
-  wo:        string;
-  symptom:   string;   // WO/notification description
-  fm:        string;   // failure_mode
-  cc:        string;   // cause_code
-  rc1:       string;
-  rc2:       string;
-  rc3:       string;
-  conf:      string;   // confirmation_text (short)
-  conf_long: string;   // confirmation_long_text
+  wo: string;
+  description: string;
+  catalog: string;
+  part: string;
+  damage: string;
+  cause: string;
+  conf: string;
+  conf_long: string;
   equipment: string;
+  catalog_hint: Array<{ part: string; damage: string; cause: string }>;
 }
 
-// ─── AI response item ─────────────────────────────────────────────────────────
-
+// ─── AI response item ───────────────────────────────────────────────────────
 interface AIResponseItem {
-  wo:  string;
+  wo: string;
   cat: string;
   sev: string;
   cmt: string;
+  suggested?: { part?: string; damage?: string; cause?: string };
 }
 
-// ─── Options ─────────────────────────────────────────────────────────────────
-
+// ─── Options ────────────────────────────────────────────────────────────────
 export interface AITextModuleOptions {
-  sessionId:    string;
-  columnMap:    ColumnMap;
-  aiConfig:     AIConfig;
+  runId: string;
+  columnMap: ColumnMap;
+  aiConfig: AIConfig;
+  catalogAvailable: boolean;
+  /** WO numbers to limit AI to (typically the rule-flagged subset). Empty = all WOs in scope. */
+  scopeWOs?: string[];
   scopeWOCount: number;
-  onProgress:   (processed: number, total: number) => void;
-  cancelRef:    { current: boolean };
+  onProgress: (processed: number, total: number) => void;
+  cancelRef: { current: boolean };
 }
-
-// ─── Main export ─────────────────────────────────────────────────────────────
 
 export async function runAITextModule(opts: AITextModuleOptions): Promise<AIFlagSummary> {
-  const { columnMap, aiConfig, scopeWOCount, onProgress, cancelRef } = opts;
+  const { columnMap, aiConfig, scopeWOCount, onProgress, cancelRef, catalogAvailable, scopeWOs } = opts;
 
-  // ── 1. Fetch WO text fields from v_analysis_scope ─────────────────────────
-  const rows = await query(`
-    SELECT
-      ${columnMap.work_order_number        ? 'work_order_number'        : "'' AS work_order_number"},
-      ${columnMap.work_order_description   ? 'work_order_description'   : columnMap.notification_description ? 'notification_description AS work_order_description' : "'' AS work_order_description"},
-      ${columnMap.failure_mode             ? 'failure_mode'             : "'' AS failure_mode"},
-      ${columnMap.cause_code               ? 'cause_code'               : "'' AS cause_code"},
-      ${columnMap.reliability_code_1       ? 'reliability_code_1'       : "'' AS reliability_code_1"},
-      ${columnMap.reliability_code_2       ? 'reliability_code_2'       : "'' AS reliability_code_2"},
-      ${columnMap.reliability_code_3       ? 'reliability_code_3'       : "'' AS reliability_code_3"},
-      ${columnMap.confirmation_text        ? 'confirmation_text'        : "'' AS confirmation_text"},
-      ${columnMap.confirmation_long_text   ? 'confirmation_long_text'   : "'' AS confirmation_long_text"},
-      ${columnMap.equipment                ? 'equipment'                : "'' AS equipment"}
-    FROM v_analysis_scope
-    ORDER BY work_order_number
-  `);
+  // 1. Build WO record set, limited to scopeWOs if provided
+  const records = await _fetchWORecords(columnMap, catalogAvailable, scopeWOs);
 
-  const woRecords: WORecord[] = rows.map(r => ({
-    wo:        String(r.work_order_number      ?? '').trim(),
-    symptom:   String(r.work_order_description ?? '').trim(),
-    fm:        String(r.failure_mode           ?? '').trim(),
-    cc:        String(r.cause_code             ?? '').trim(),
-    rc1:       String(r.reliability_code_1     ?? '').trim(),
-    rc2:       String(r.reliability_code_2     ?? '').trim(),
-    rc3:       String(r.reliability_code_3     ?? '').trim(),
-    conf:      String(r.confirmation_text      ?? '').trim(),
-    conf_long: String(r.confirmation_long_text ?? '').trim(),
-    equipment: String(r.equipment              ?? '').trim(),
-  }));
-
-  // ── 2. Reset DuckDB table ─────────────────────────────────────────────────
+  // 2. Reset DB flags table
   await createAIFlagsTable();
 
+  if (records.length === 0) {
+    return {
+      totalFlagged: 0,
+      totalFlags: 0,
+      byCategory: {},
+      generatedAt: new Date().toISOString(),
+      scopeWOCount,
+    };
+  }
+
+  // 3. Process in batches
   const allFlags: AIFlag[] = [];
   let processed = 0;
-
-  // ── 3. Process in batches ─────────────────────────────────────────────────
-  for (let i = 0; i < woRecords.length; i += BATCH_SIZE) {
+  for (let i = 0; i < records.length; i += BATCH_SIZE) {
     if (cancelRef.current) break;
-
-    const batch = woRecords.slice(i, i + BATCH_SIZE);
-    const batchFlags = await _processBatch(batch, aiConfig);
-
-    if (batchFlags.length > 0) {
-      await insertAIFlagsBatch(batchFlags);
-      allFlags.push(...batchFlags);
+    const batch = records.slice(i, i + BATCH_SIZE);
+    try {
+      const batchFlags = await _processBatch(batch, aiConfig);
+      if (batchFlags.length > 0) {
+        await insertAIFlagsBatch(batchFlags);
+        allFlags.push(...batchFlags);
+      }
+    } catch (err) {
+      console.warn('AI batch failed', err);
     }
-
-    processed = Math.min(i + BATCH_SIZE, woRecords.length);
-    onProgress(processed, woRecords.length);
+    processed += batch.length;
+    onProgress(processed, records.length);
   }
 
-  // ── 4. Build summary ──────────────────────────────────────────────────────
-  const byCategory: Record<FlagCategory, number> = {
-    symptom_code_conflict:     0,
-    symptom_closure_conflict:  0,
-    code_closure_conflict:     0,
-    incomplete_classification: 0,
-    poor_closure:              0,
-    generic_symptom:           0,
-  };
-
+  // 4. Aggregate summary
+  const byCategory: Partial<Record<FlagCategory, number>> = {};
+  const flaggedWOs = new Set<string>();
   for (const f of allFlags) {
-    if (f.category in byCategory) byCategory[f.category as FlagCategory]++;
+    byCategory[f.category] = (byCategory[f.category] ?? 0) + 1;
+    flaggedWOs.add(f.woNumber);
   }
-
-  const distinctWOs = new Set(allFlags.map(f => f.woNumber)).size;
 
   return {
-    totalFlagged:  distinctWOs,
-    totalFlags:    allFlags.length,
+    totalFlagged: flaggedWOs.size,
+    totalFlags: allFlags.length,
     byCategory,
-    generatedAt:   new Date().toISOString(),
+    generatedAt: new Date().toISOString(),
     scopeWOCount,
   };
 }
 
-// ─── Batch processor ─────────────────────────────────────────────────────────
+// ─── Fetch WO records joined with optional catalog hint ────────────────────
+async function _fetchWORecords(
+  columnMap: ColumnMap,
+  catalogAvailable: boolean,
+  scopeWOs?: string[],
+): Promise<WORecord[]> {
+  if (!columnMap.work_order_number) return [];
 
-async function _processBatch(batch: WORecord[], aiConfig: AIConfig): Promise<AIFlag[]> {
-  // Build payload — field names match what the prompt describes
-  const payload = batch.map(r => {
-    const item: Record<string, string> = { wo: r.wo };
-    if (r.symptom)   item.symptom   = r.symptom.slice(0, 300);
-    if (r.fm)        item.fm        = r.fm;
-    if (r.cc)        item.cc        = r.cc;
-    if (r.rc1)       item.rc1       = r.rc1;
-    if (r.rc2)       item.rc2       = r.rc2;
-    if (r.rc3)       item.rc3       = r.rc3;
-    if (r.conf)      item.conf      = r.conf.slice(0, 300);
-    if (r.conf_long) item.conf_long = r.conf_long.slice(0, 600);
-    return item;
-  });
+  const has = (k: keyof ColumnMap) => !!columnMap[k];
 
-  let responseText = '';
-  try {
-    responseText = await callAI(
-      aiConfig.provider,
-      aiConfig.apiKey,
-      aiConfig.modelId,
-      [{ role: 'user', content: JSON.stringify(payload) }],
-      SYSTEM_PROMPT,
-      '',
-      aiConfig.powerAutomateUrl ?? '',
-    );
-  } catch {
-    return [];
+  const select = (col: keyof ColumnMap, alias: string) =>
+    has(col) ? `CAST(${col} AS VARCHAR) AS ${alias}` : `'' AS ${alias}`;
+
+  const woFilter =
+    scopeWOs && scopeWOs.length > 0
+      ? `WHERE work_order_number IN (${scopeWOs.map((w) => `'${w.replace(/'/g, "''")}'`).join(',')})`
+      : '';
+
+  const rows = await query(`
+    SELECT
+      CAST(work_order_number AS VARCHAR) AS wo,
+      ${select('work_order_description', 'description')},
+      ${select('failure_catalog_desc', 'catalog')},
+      ${select('object_part_code_description', 'part')},
+      ${select('damage_code_description', 'damage')},
+      ${select('cause_code_description', 'cause')},
+      ${select('confirmation_text', 'conf')},
+      ${select('confirmation_long_text', 'conf_long')},
+      ${select('equipment_description', 'equipment')}
+    FROM v_analysis_scope
+    ${woFilter}
+  `);
+
+  // Build per-catalog hint map (for false_not_listed). Only when catalog table exists
+  // AND audit has failure_catalog_desc mapped.
+  const hintByCatalog: Record<string, Array<{ part: string; damage: string; cause: string }>> = {};
+  if (catalogAvailable && has('failure_catalog_desc')) {
+    try {
+      const distinctCatalogs = Array.from(
+        new Set(rows.map((r) => String(r.catalog ?? '')).filter((c) => c)),
+      );
+      for (const cat of distinctCatalogs) {
+        const cRows = await query(`
+          SELECT object_part_code_description AS part,
+                 damage_code_description     AS damage,
+                 cause_code_description      AS cause
+          FROM failure_catalog
+          WHERE failure_catalog_desc = '${cat.replace(/'/g, "''")}'
+          LIMIT ${MAX_CATALOG_BRANCH_ROWS}
+        `);
+        hintByCatalog[cat] = cRows.map((r) => ({
+          part: String(r.part ?? ''),
+          damage: String(r.damage ?? ''),
+          cause: String(r.cause ?? ''),
+        }));
+      }
+    } catch (err) {
+      console.warn('Catalog hint lookup failed', err);
+    }
   }
 
-  // Strip accidental markdown fences
-  const cleaned = responseText.trim()
-    .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
+  return rows.map((r) => ({
+    wo: String(r.wo ?? ''),
+    description: String(r.description ?? ''),
+    catalog: String(r.catalog ?? ''),
+    part: String(r.part ?? ''),
+    damage: String(r.damage ?? ''),
+    cause: String(r.cause ?? ''),
+    conf: String(r.conf ?? ''),
+    conf_long: String(r.conf_long ?? ''),
+    equipment: String(r.equipment ?? ''),
+    catalog_hint: hintByCatalog[String(r.catalog ?? '')] ?? [],
+  }));
+}
 
-  let parsed: AIResponseItem[] = [];
-  try {
-    const raw = JSON.parse(cleaned);
-    if (Array.isArray(raw)) parsed = raw;
-  } catch {
-    return [];
-  }
+async function _processBatch(records: WORecord[], aiConfig: AIConfig): Promise<AIFlag[]> {
+  const userPrompt =
+    'Audit these work orders. Return JSON array only.\n\n' +
+    JSON.stringify(records, null, 2);
 
-  const VALID_CATEGORIES: FlagCategory[] = [
-    'symptom_code_conflict',
-    'symptom_closure_conflict',
-    'code_closure_conflict',
-    'incomplete_classification',
-    'poor_closure',
-    'generic_symptom',
-  ];
-  const VALID_SEVERITIES = ['HIGH', 'MEDIUM', 'LOW'] as const;
+  const raw = await callAI(
+    aiConfig.provider,
+    aiConfig.apiKey,
+    aiConfig.modelId,
+    [{ role: 'user', content: userPrompt }],
+    SYSTEM_PROMPT,
+    '',
+    aiConfig.powerAutomateUrl ?? '',
+  );
 
-  // Build WO lookup for snapshot population
-  const lookup = new Map(batch.map(r => [r.wo, r]));
+  const parsed = _parseJsonArray(raw);
+  if (!Array.isArray(parsed)) return [];
 
+  const recordByWO = new Map(records.map((r) => [r.wo, r]));
   const flags: AIFlag[] = [];
   for (const item of parsed) {
-    if (!item.wo || !item.cat || !item.sev || !item.cmt) continue;
-    if (!VALID_CATEGORIES.includes(item.cat as FlagCategory)) continue;
-    if (!VALID_SEVERITIES.includes(item.sev as any)) continue;
+    if (!item || typeof item !== 'object') continue;
+    const ai = item as AIResponseItem;
+    const wo = String(ai.wo ?? '').trim();
+    const cat = String(ai.cat ?? '').trim();
+    const sev = String(ai.sev ?? '').trim().toUpperCase();
+    if (!wo || !VALID_CATEGORIES.has(cat) || !VALID_SEVERITIES.has(sev)) continue;
+    const rec = recordByWO.get(wo);
+    if (!rec) continue;
 
-    const src = lookup.get(item.wo);
-    if (!src) continue;
+    const codes =
+      rec.part || rec.damage || rec.cause
+        ? `Part: ${rec.part || '—'} | Damage: ${rec.damage || '—'} | Cause: ${rec.cause || '—'}`
+        : '';
+    const closure = rec.conf || rec.conf_long || '';
 
-    // Build formatted codes string for display
-    const codeParts = [
-      src.fm  ? `FM: ${src.fm}`   : null,
-      src.cc  ? `Cause: ${src.cc}` : null,
-      src.rc1 ? `RC1: ${src.rc1}` : null,
-      src.rc2 ? `RC2: ${src.rc2}` : null,
-      src.rc3 ? `RC3: ${src.rc3}` : null,
-    ].filter(Boolean);
+    const flag: AIFlag = {
+      woNumber: wo,
+      category: cat as FlagCategory,
+      severity: sev as AIFlag['severity'],
+      comment: String(ai.cmt ?? '').slice(0, 300),
+      description: rec.description.slice(0, 500),
+      codes,
+      closure: closure.slice(0, 500),
+      equipment: rec.equipment,
+    };
 
-    flags.push({
-      woNumber:  item.wo,
-      category:  item.cat as FlagCategory,
-      severity:  item.sev as AIFlag['severity'],
-      comment:   String(item.cmt).slice(0, 160),
-      symptom:   src.symptom,
-      codes:     codeParts.length > 0 ? codeParts.join(' | ') : '— none assigned —',
-      closure:   src.conf || src.conf_long.slice(0, 200) || '',
-      equipment: src.equipment,
-    });
+    if (cat === 'false_not_listed' && ai.suggested) {
+      const part = String(ai.suggested.part ?? '').trim();
+      const damage = String(ai.suggested.damage ?? '').trim();
+      const cause = String(ai.suggested.cause ?? '').trim();
+      if (part || damage || cause) {
+        flag.suggested = { object_part: part, damage, cause };
+      }
+    }
+
+    flags.push(flag);
   }
 
   return flags;
 }
+
+function _parseJsonArray(s: string): unknown[] | null {
+  if (!s) return null;
+  // Strip code fences if the model added them
+  const cleaned = s
+    .replace(/^\s*```(?:json)?\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+  // Find first '[' to last ']'
+  const start = cleaned.indexOf('[');
+  const end = cleaned.lastIndexOf(']');
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+export const FLAG_CATEGORY_LABELS: Record<FlagCategory, string> = {
+  desc_code_conflict: 'Desc — Code Conflict',
+  false_not_listed: 'False Not Listed',
+  desc_confirmation_mismatch: 'Desc — Confirmation Mismatch',
+  desc_code_confirmation_misalign: 'Desc — Code — Confirmation Misalignment',
+  generic_description: 'Generic Description',
+  generic_confirmation: 'Generic Confirmation',
+};

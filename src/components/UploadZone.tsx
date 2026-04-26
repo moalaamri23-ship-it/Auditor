@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import Icon from './Icon';
-import { useStore } from '../store/useStore';
+import { useStore, useActiveProject, useRunsForProject } from '../store/useStore';
 import { parseFile } from '../services/FileParser';
 import { detectColumns } from '../services/SchemaDetector';
 import { validateStructure } from '../services/ValidationService';
@@ -10,94 +10,158 @@ import type { ValidationReport } from '../types';
 type UploadStage = 'idle' | 'parsing' | 'detecting' | 'validating' | 'done' | 'error';
 
 export default function UploadZone() {
-  const { createSession, updateSession, setScreen, setActiveSession } = useStore();
+  const { createRun, updateRun, setScreen, setActiveRun } = useStore();
+  const project = useActiveProject();
+  const projectRuns = useRunsForProject(project?.id ?? null);
 
   const [stage, setStage] = useState<UploadStage>('idle');
   const [dragOver, setDragOver] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
-  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [pendingRunId, setPendingRunId] = useState<string | null>(null);
+  const [periodLabel, setPeriodLabel] = useState(() => suggestNextPeriod(project?.period));
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ── Process file ──────────────────────────────────────────────────────────
+  const periodTaken = projectRuns.some((r) => r.periodLabel === periodLabel.trim());
 
-  const processFile = useCallback(async (file: File) => {
-    setStage('parsing');
-    setErrorMsg('');
-    setValidationReport(null);
+  const processFile = useCallback(
+    async (file: File) => {
+      if (!project) {
+        setErrorMsg('No active audit project. Create a project first.');
+        setStage('error');
+        return;
+      }
+      if (!periodLabel.trim()) {
+        setErrorMsg('Enter a period label before uploading.');
+        setStage('error');
+        return;
+      }
 
-    try {
-      // 1. Parse
-      const parsed = await parseFile(file);
-      setStage('detecting');
+      setStage('parsing');
+      setErrorMsg('');
+      setValidationReport(null);
 
-      // 2. Detect schema
-      const detection = detectColumns(parsed.headers);
-      setStage('validating');
+      try {
+        const parsed = await parseFile(file);
+        setStage('detecting');
 
-      // 3. Validate structure
-      const report = validateStructure(parsed, detection.columnMap);
-      setValidationReport(report);
+        const detection = detectColumns(parsed.headers);
+        setStage('validating');
 
-      // 4. Create session in store
-      const sessionId = createSession(parsed);
-      setPendingSessionId(sessionId);
+        const report = validateStructure(parsed, detection.columnMap);
+        setValidationReport(report);
 
-      // 5. Persist column map + validation into session
-      updateSession(sessionId, {
-        columnMap: detection.columnMap,
-        validationReport: report,
-        stage: 'uploaded',
-      });
+        const runId = createRun({
+          projectId: project.id,
+          periodLabel: periodLabel.trim(),
+          file: parsed,
+        });
+        setPendingRunId(runId);
 
-      // 6. Cache raw rows for DuckDB loading in SchemaMapper
-      ParsedDataCache.set(sessionId, parsed.headers, parsed.rows);
+        updateRun(runId, {
+          columnMap: detection.columnMap,
+          validationReport: report,
+          stage: 'uploaded',
+        });
 
-      setStage('done');
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'An unexpected error occurred.');
-      setStage('error');
-    }
-  }, [createSession, updateSession]);
+        ParsedDataCache.set(runId, parsed.headers, parsed.rows);
 
-  // ── Drag handlers ─────────────────────────────────────────────────────────
+        setStage('done');
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : 'An unexpected error occurred.');
+        setStage('error');
+      }
+    },
+    [createRun, updateRun, project, periodLabel],
+  );
 
-  const onDrop = useCallback((e: React.DragEvent) => {
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      const file = e.dataTransfer.files[0];
+      if (file) processFile(file);
+    },
+    [processFile],
+  );
+
+  const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) processFile(file);
-  }, [processFile]);
-
-  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragOver(true); };
+    setDragOver(true);
+  };
   const onDragLeave = () => setDragOver(false);
   const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) processFile(file);
   };
 
-  // ── Proceed to schema mapper ──────────────────────────────────────────────
-
   const proceed = () => {
-    if (!pendingSessionId) return;
-    setActiveSession(pendingSessionId);
+    if (!pendingRunId) return;
+    setActiveRun(pendingRunId);
     setScreen('schema-mapper');
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  if (!project) {
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-12">
+        <div className="bg-amber-50 border border-amber-200 rounded p-6">
+          <div className="font-bold text-amber-800">No active project</div>
+          <p className="text-sm text-amber-700 mt-1">
+            Create an audit project from the Projects screen before uploading data.
+          </p>
+          <button
+            onClick={() => setScreen('projects')}
+            className="mt-3 text-xs font-bold underline"
+          >
+            Go to Projects
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">
-
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">Upload SAP Records</h1>
+        <button
+          onClick={() => setScreen('projects')}
+          className="text-xs font-bold text-slate-400 hover:text-slate-700 inline-flex items-center gap-1 mb-3"
+        >
+          <Icon name="arrowLeft" className="w-3.5 h-3.5" />
+          {project.name}
+        </button>
+        <h1 className="text-3xl font-bold text-slate-900">Upload Audit Run</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Accepts denormalized SAP Records exports — Excel (.xlsx, .xls) or CSV.
+          Run #{projectRuns.length + 1} of "{project.name}". Accepts SAP exports — Excel (.xlsx,
+          .xls) or CSV.
         </p>
       </div>
 
-      {/* ── Drop zone ── */}
+      {(stage === 'idle' || stage === 'error') && (
+        <div className="mb-6">
+          <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">
+            Period label <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={periodLabel}
+            onChange={(e) => setPeriodLabel(e.target.value)}
+            placeholder="e.g. 2026-Q1"
+            className="w-full border border-slate-200 rounded px-3 py-2 text-sm font-mono focus:border-brand-500 focus:outline-none"
+          />
+          <p className="text-xs text-slate-400 mt-1.5">
+            Used to compare runs over time. Best results when each run covers a distinct period.
+          </p>
+          {periodTaken && (
+            <div className="text-xs text-amber-700 mt-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              A run with this period already exists in this project. Comparison works best when each
+              run covers a distinct period.
+            </div>
+          )}
+        </div>
+      )}
+
       {(stage === 'idle' || stage === 'error') && (
         <div
           onDrop={onDrop}
@@ -110,9 +174,7 @@ export default function UploadZone() {
               : 'border-slate-300 hover:border-brand-400 hover:bg-slate-50'
           }`}
         >
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center transition ${
-            dragOver ? 'bg-brand-100' : 'bg-slate-100'
-          }`}>
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center transition ${dragOver ? 'bg-brand-100' : 'bg-slate-100'}`}>
             <Icon name="upload" className={`w-8 h-8 ${dragOver ? 'text-brand-500' : 'text-slate-400'}`} />
           </div>
           <div className="text-center">
@@ -120,9 +182,7 @@ export default function UploadZone() {
               {dragOver ? 'Drop your file here' : 'Drag & drop your file here'}
             </div>
             <div className="text-sm text-slate-400 mt-1">or click to browse</div>
-            <div className="text-xs text-slate-400 mt-2 font-mono">
-              .xlsx · .xls · .csv
-            </div>
+            <div className="text-xs text-slate-400 mt-2 font-mono">.xlsx · .xls · .csv</div>
           </div>
           <input
             ref={inputRef}
@@ -134,7 +194,6 @@ export default function UploadZone() {
         </div>
       )}
 
-      {/* ── Error message ── */}
       {stage === 'error' && errorMsg && (
         <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3 animate-enter">
           <Icon name="alertCircle" className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
@@ -145,7 +204,6 @@ export default function UploadZone() {
         </div>
       )}
 
-      {/* ── Progress states ── */}
       {(stage === 'parsing' || stage === 'detecting' || stage === 'validating') && (
         <div className="flex flex-col items-center gap-6 py-12 animate-enter">
           <div className="flex gap-2">
@@ -159,8 +217,8 @@ export default function UploadZone() {
           </div>
           <div className="text-center">
             <div className="font-semibold text-slate-700">
-              {stage === 'parsing'    && 'Parsing file…'}
-              {stage === 'detecting'  && 'Detecting column schema…'}
+              {stage === 'parsing' && 'Parsing file…'}
+              {stage === 'detecting' && 'Detecting column schema…'}
               {stage === 'validating' && 'Validating data structure…'}
             </div>
             <div className="text-xs text-slate-400 mt-1">
@@ -170,11 +228,8 @@ export default function UploadZone() {
         </div>
       )}
 
-      {/* ── Done state: show validation summary ── */}
       {stage === 'done' && validationReport && (
         <div className="animate-enter space-y-4">
-
-          {/* Errors */}
           {validationReport.errors.length > 0 && (
             <IssueSection
               title="Blocking Issues"
@@ -184,8 +239,6 @@ export default function UploadZone() {
               items={validationReport.errors.map((e) => e.message)}
             />
           )}
-
-          {/* Warnings */}
           {validationReport.warnings.length > 0 && (
             <IssueSection
               title="Warnings"
@@ -195,8 +248,6 @@ export default function UploadZone() {
               items={validationReport.warnings.map((w) => w.message)}
             />
           )}
-
-          {/* Passed checks */}
           {validationReport.passed.length > 0 && (
             <IssueSection
               title="Passed"
@@ -206,8 +257,6 @@ export default function UploadZone() {
               items={validationReport.passed}
             />
           )}
-
-          {/* Info */}
           {validationReport.infos.length > 0 && (
             <IssueSection
               title="Info"
@@ -218,13 +267,12 @@ export default function UploadZone() {
             />
           )}
 
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => {
                 setStage('idle');
                 setValidationReport(null);
-                setPendingSessionId(null);
+                setPendingRunId(null);
               }}
               className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-slate-50 transition text-sm"
             >
@@ -245,23 +293,20 @@ export default function UploadZone() {
 
           {!validationReport.canProceed && (
             <p className="text-xs text-red-600">
-              Resolve the blocking issues above before proceeding. You may need to check the file
-              format or manually map columns on the next screen.
+              Resolve the blocking issues above before proceeding. You may need to map columns
+              manually on the next screen.
             </p>
           )}
         </div>
       )}
 
-      {/* ── Privacy notice ── */}
       <div className="mt-8 p-3 bg-slate-50 border border-slate-200 rounded-lg flex gap-2 text-xs text-slate-500">
         <Icon name="shield" className="w-4 h-4 shrink-0 text-slate-400" />
-        Your file never leaves your browser. All parsing and analysis runs locally using DuckDB WASM.
+        Your file never leaves your browser. All parsing and analysis runs locally.
       </div>
     </div>
   );
 }
-
-// ─── Issue section ─────────────────────────────────────────────────────────
 
 function IssueSection({
   title, icon, iconColor, bg, items,
@@ -288,4 +333,25 @@ function IssueSection({
       </ul>
     </div>
   );
+}
+
+function suggestNextPeriod(period?: string | null): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  switch (period) {
+    case 'WEEKLY': {
+      const w = Math.ceil(((d.getTime() - new Date(y, 0, 1).getTime()) / 86400000 + new Date(y, 0, 1).getDay() + 1) / 7);
+      return `${y}-W${String(w).padStart(2, '0')}`;
+    }
+    case 'BIWEEKLY': {
+      const w = Math.ceil(((d.getTime() - new Date(y, 0, 1).getTime()) / 86400000 + new Date(y, 0, 1).getDay() + 1) / 7);
+      return `${y}-BW${Math.ceil(w / 2)}`;
+    }
+    case 'QUARTERLY':
+      return `${y}-Q${Math.floor(d.getMonth() / 3) + 1}`;
+    case 'YEARLY':
+      return `${y}`;
+    default:
+      return `${y}-Q${Math.floor(d.getMonth() / 3) + 1}`;
+  }
 }

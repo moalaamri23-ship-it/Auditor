@@ -3,27 +3,21 @@
 // ─────────────────────────────────────────────
 export type CanonicalColumn =
   | 'work_order_number'
-  | 'notification_number'
-  | 'equipment'
-  | 'functional_location'
   | 'notification_date'
-  | 'scheduled_start_date'
-  | 'actual_start_date'
-  | 'actual_finish_date'
-  | 'confirmation_date'
-  | 'notification_description'
   | 'work_order_description'
+  | 'work_center'
+  | 'equipment'
+  | 'equipment_description'
+  | 'failure_catalog_desc'
+  | 'functional_location'
+  | 'functional_location_description'
+  | 'object_part_code_description'
+  | 'damage_code_description'
+  | 'cause_code_description'
+  | 'operation_description'
   | 'confirmation_text'
   | 'confirmation_long_text'
-  | 'reliability_code_1'
-  | 'reliability_code_2'
-  | 'reliability_code_3'
-  | 'failure_mode'
-  | 'cause_code'
-  | 'notification_status'
-  | 'work_order_status'
-  | 'system_status'
-  | 'user_status';
+  | 'code_group';
 
 // ─────────────────────────────────────────────
 // COLUMN MAPPING
@@ -46,7 +40,7 @@ export interface SchemaDetectionResult {
 }
 
 // ─────────────────────────────────────────────
-// PARSED FILE (raw, before DuckDB)
+// PARSED FILE (raw, before Database load)
 // ─────────────────────────────────────────────
 export interface ParsedFile {
   headers: string[];
@@ -82,9 +76,9 @@ export interface ValidationReport {
 // DATA PROFILING
 // ─────────────────────────────────────────────
 export type GranularityLevel =
-  | 'WO_LEVEL'           // avg rows/WO < 1.2  — safe to treat rows ≈ WOs
-  | 'MIXED'              // 1.2–3.0             — some confirmation expansion
-  | 'CONFIRMATION_LEVEL' // > 3.0               — heavy expansion, always deduplicate
+  | 'WO_LEVEL'
+  | 'MIXED'
+  | 'CONFIRMATION_LEVEL'
   | 'UNKNOWN';
 
 export interface ColumnProfile {
@@ -92,7 +86,7 @@ export interface ColumnProfile {
   canonicalName: CanonicalColumn | null;
   detectedType: 'date' | 'number' | 'text' | 'id' | 'unknown';
   nullCount: number;
-  nullPct: number;         // 0–100
+  nullPct: number;
   distinctCount: number;
   sampleValues: string[];
   mappingConfidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNMAPPED';
@@ -101,7 +95,6 @@ export interface ColumnProfile {
 export interface DataProfile {
   totalRows: number;
   distinctWOs: number;
-  distinctNotifications: number;
   distinctEquipment: number;
   distinctFunctionalLocations: number;
   rowsPerWO: number;
@@ -110,78 +103,132 @@ export interface DataProfile {
   dateRange: { min: string; max: string } | null;
   columnProfiles: ColumnProfile[];
   duplicateRowCount: number;
-  dataQualityScore: number; // 0–100 composite
+  dataQualityScore: number;
+  codeGroupPresent: boolean;
+  failureCatalogMatchRate: number; // 0–1, fraction of WOs whose failure_catalog_desc exists in the catalog
 }
 
 // ─────────────────────────────────────────────
-// SESSION
+// AUDIT PROJECT + RUN
 // ─────────────────────────────────────────────
-export type SessionStage = 'uploaded' | 'mapped' | 'profiled' | 'analysed';
+export type AuditType   = 'TOTAL' | 'SINGLE_BANK';
+export type AuditPeriod = 'WEEKLY' | 'BIWEEKLY' | 'QUARTERLY' | 'YEARLY';
+
+export interface AuditProject {
+  id: string;
+  name: string;
+  type: AuditType;
+  period: AuditPeriod;
+  bankPattern?: string;        // SAP-LIKE pattern, e.g. "OS-BK053-LOT03-PWT-%"; required if type === 'SINGLE_BANK'
+  createdAt: string;
+  runIds: string[];            // ordered, oldest-first
+}
+
+export type RunStage =
+  | 'init'         // project just created, no upload yet
+  | 'uploaded'
+  | 'mapped'
+  | 'profiled'
+  | 'pre-checked'
+  | 'analysed';
 
 export interface AnalysisFilters {
-  dateFrom:          string | null;
-  dateTo:            string | null;
-  equipment:         string[];
+  dateFrom: string | null;
+  dateTo: string | null;
+  workCenter: string[];
   functionalLocation: string[];
-  orderType:         string[];
-  systemStatus:      string[];
+  failureCatalog: string[];
+  objectPart: string[];
+  damage: string[];
+  cause: string[];
 }
 
 export interface FilterOptions {
-  equipment:          string[];
+  workCenter: string[];
   functionalLocation: string[];
-  orderType:          string[];
-  systemStatus:       string[];
-  dateMin:            string | null;
-  dateMax:            string | null;
+  failureCatalog: string[];
+  objectPart: string[];
+  damage: string[];
+  cause: string[];
+  dateMin: string | null;
+  dateMax: string | null;
 }
 
 export const EMPTY_FILTERS: AnalysisFilters = {
-  dateFrom:           null,
-  dateTo:             null,
-  equipment:          [],
+  dateFrom: null,
+  dateTo: null,
+  workCenter: [],
   functionalLocation: [],
-  orderType:          [],
-  systemStatus:       [],
+  failureCatalog: [],
+  objectPart: [],
+  damage: [],
+  cause: [],
 };
 
-export interface AIModuleInsight {
-  moduleId:   string;
-  moduleName: string;
-  insight:    string;         // AI narrative for this module
-  priority:   'HIGH' | 'MEDIUM' | 'LOW';
-}
-
-export interface AIInsights {
-  overallSummary:     string;
-  moduleInsights:     AIModuleInsight[];
-  topRecommendations: string[];
-  insufficientData:   boolean;
-  generatedAt:        string;  // ISO
-}
-
-export interface Session {
+export interface AuditRun {
   id: string;
+  projectId: string;
+  runIndex: number;            // 1-based within project
+  periodLabel: string;         // free-form, e.g. "2026-Q1", used for distinct-period validation
   name: string;
   fileName: string;
   fileSize: number;
-  uploadedAt: string;          // ISO
+  uploadedAt: string;
   lastAnalysedAt: string | null;
   columnMap: ColumnMap;
   validationReport: ValidationReport | null;
   dataProfile: DataProfile | null;
-  analysisResults: import('./analysis/analysisTypes').AnalysisResults | null;
-  aiInsights: AIInsights | null;
-  aiFlags: AIFlag[];           // per-record AI flags (persisted in localStorage)
+  ruleChecks: RuleCheckResult | null;
+  aiFlags: AIFlag[];
   aiFlagSummary: AIFlagSummary | null;
-  maturityScore: number | null; // 0–100 composite
-  stage: SessionStage;
-  hasDataInDuckDB: boolean;    // false after page refresh (DuckDB is in-memory)
+  stage: RunStage;
+  hasDataInDB: boolean;        // false on cold reload — Database is in-memory
   analysisFilters: AnalysisFilters;
 }
 
 // ─────────────────────────────────────────────
-// AI
+// FAILURE CATALOG
+// ─────────────────────────────────────────────
+export interface FailureCatalogEntry {
+  failure_catalog_desc: string;
+  object_part_code_description: string;
+  damage_code_description: string;
+  cause_code_description: string;
+}
+
+export interface FailureCatalog {
+  source: 'bundled' | 'user';
+  generatedAt: string;
+  rowCount: number;
+  rows: FailureCatalogEntry[];
+}
+
+// ─────────────────────────────────────────────
+// RULE-BASED PRE-CHECKS (Database tier)
+// ─────────────────────────────────────────────
+export type RuleCheckId =
+  | 'missing_confirmation'
+  | 'not_listed_codes'
+  | 'missing_scoping_text'
+  | 'catalog_invalid_object_part'
+  | 'catalog_invalid_damage_for_part'
+  | 'catalog_invalid_cause_for_damage'
+  | 'catalog_missing_match';
+
+export interface RuleCheckBucket {
+  matched: number;
+  sampleWOs: string[];   // up to 5
+}
+
+export interface RuleCheckResult {
+  generatedAt: string;
+  totalWOs: number;
+  perCheck: Partial<Record<RuleCheckId, RuleCheckBucket>>;
+  flaggedWOs: Array<{ wo: string; checks: RuleCheckId[] }>;
+}
+
+// ─────────────────────────────────────────────
+// AI CONFIG / PROVIDERS
 // ─────────────────────────────────────────────
 export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'azure' | 'openrouter' | 'copilot';
 
@@ -192,74 +239,62 @@ export interface AIConfig {
   powerAutomateUrl?: string;
 }
 
-export interface AIFinding {
-  moduleId: string;
-  finding: string;
-  confidence: number; // 0–1
-  reasoning: string;
-  recommendedAction: string;
-  insufficientData: boolean;
-  generatedAt: string; // ISO
-}
-
 // ─────────────────────────────────────────────
-// AI PER-RECORD FLAGS
+// AI PER-RECORD FLAGS — new taxonomy
 // ─────────────────────────────────────────────
-//
-// Three artefacts form a triangle:
-//   SYMPTOM (WO/notification description)
-//   CLASSIFICATION (reliability codes, failure mode, cause code)
-//   CLOSURE (confirmation text short + long)
-//
-// Six check categories — three clashes + three quality flags:
-
 export type FlagCategory =
-  // ── Clash checks (pairwise inconsistency) ─────────────────────
-  | 'symptom_code_conflict'     // SYMPTOM ↔ CLASSIFICATION: codes don't match reported symptom
-  | 'symptom_closure_conflict'  // SYMPTOM ↔ CLOSURE: confirmation describes different work than reported
-  | 'code_closure_conflict'     // CLASSIFICATION ↔ CLOSURE: codes don't match what technician wrote
-  // ── Quality checks (individual artefact quality) ──────────────
-  | 'incomplete_classification' // CLASSIFICATION: codes blank/partial despite clear description
-  | 'poor_closure'              // CLOSURE: confirmation too vague/generic/copy-pasted to be auditable
-  | 'generic_symptom';          // SYMPTOM: WO description too generic to cross-check anything
+  | 'desc_code_conflict'              // Description identifies failure clearly but codes don't match
+  | 'false_not_listed'                // Codes = "Not Listed" but Description/Confirmation imply a known catalog code
+  | 'desc_confirmation_mismatch'      // Description and Confirmation describe different things
+  | 'desc_code_confirmation_misalign' // All three sources contradict
+  | 'generic_description'             // Description doesn't define the request
+  | 'generic_confirmation';           // Confirmation provides no useful information
 
 export interface AIFlag {
-  woNumber:   string;
-  category:   FlagCategory;
-  severity:   'HIGH' | 'MEDIUM' | 'LOW';
-  comment:    string;         // AI explanation — specific, references actual text (≤150 chars)
-  // Snapshots for side-by-side display (denormalised — no DuckDB round-trip needed)
-  symptom?:   string;         // WO/notification description
-  codes?:     string;         // formatted: "FM: X | Cause: Y | RC1: Z"
-  closure?:   string;         // confirmation short text (truncated)
+  woNumber: string;
+  category: FlagCategory;
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  comment: string;
+  description?: string;     // WO description (snapshot)
+  codes?: string;           // formatted "Part: X | Damage: Y | Cause: Z"
+  closure?: string;         // confirmation short text (truncated)
   equipment?: string;
+  suggested?: {
+    object_part: string;
+    damage: string;
+    cause: string;
+  };
 }
 
 export interface AIFlagSummary {
-  totalFlagged:   number;
-  totalFlags:     number;
-  byCategory:     Record<FlagCategory, number>;
-  generatedAt:    string;   // ISO
-  scopeWOCount:   number;
+  totalFlagged: number;
+  totalFlags: number;
+  byCategory: Partial<Record<FlagCategory, number>>;
+  generatedAt: string;
+  scopeWOCount: number;
 }
 
 // ─────────────────────────────────────────────
 // APP STATE (ZUSTAND)
 // ─────────────────────────────────────────────
 export type Screen =
-  | 'dashboard'
+  | 'projects'        // dashboard listing all audit projects
+  | 'audit-init'      // wizard: name, type, period, bank
   | 'upload'
   | 'schema-mapper'
   | 'profiler'
+  | 'pre-checks'
   | 'analysis'
+  | 'comparison'
   | 'explorer'
-  | 'insights'
   | 'settings';
 
 export interface AppState {
   // Persisted
-  sessions: Session[];
-  activeSessionId: string | null;
+  projects: AuditProject[];
+  runs: AuditRun[];
+  activeProjectId: string | null;
+  activeRunId: string | null;
   aiConfig: AIConfig;
 
   // Transient UI (not persisted)
@@ -267,11 +302,24 @@ export interface AppState {
   isLoading: boolean;
   loadingMessage: string;
 
-  // Actions
-  createSession: (file: ParsedFile) => string;
-  updateSession: (id: string, updates: Partial<Session>) => void;
-  deleteSession: (id: string) => void;
-  setActiveSession: (id: string | null) => void;
+  // Actions — projects
+  createProject: (input: {
+    name: string;
+    type: AuditType;
+    period: AuditPeriod;
+    bankPattern?: string;
+  }) => string;
+  updateProject: (id: string, updates: Partial<AuditProject>) => void;
+  deleteProject: (id: string) => void;
+  setActiveProject: (id: string | null) => void;
+
+  // Actions — runs
+  createRun: (input: { projectId: string; periodLabel: string; file: ParsedFile }) => string;
+  updateRun: (id: string, updates: Partial<AuditRun>) => void;
+  deleteRun: (id: string) => void;
+  setActiveRun: (id: string | null) => void;
+
+  // Actions — UI
   setScreen: (screen: Screen) => void;
   setLoading: (loading: boolean, message?: string) => void;
   updateAIConfig: (config: Partial<AIConfig>) => void;

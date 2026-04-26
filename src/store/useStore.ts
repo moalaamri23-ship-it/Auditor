@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { AppState, Session, ParsedFile, AIConfig, Screen } from '../types';
+import type {
+  AppState, AuditProject, AuditRun, AuditType, AuditPeriod,
+  ParsedFile, AIConfig, Screen,
+} from '../types';
 import { EMPTY_FILTERS } from '../types';
+import { STORAGE_KEYS } from '../constants';
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
@@ -9,10 +13,12 @@ function generateId(): string {
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // ── Persisted state ─────────────────────────────
-      sessions: [],
-      activeSessionId: null,
+      projects: [],
+      runs: [],
+      activeProjectId: null,
+      activeRunId: null,
       aiConfig: {
         provider: 'gemini',
         apiKey: '',
@@ -21,61 +27,120 @@ export const useStore = create<AppState>()(
       },
 
       // ── Transient UI state (reset on load) ──────────
-      currentScreen: 'dashboard' as Screen,
+      currentScreen: 'projects' as Screen,
       isLoading: false,
       loadingMessage: '',
 
-      // ── Actions ──────────────────────────────────────
-      createSession: (file: ParsedFile): string => {
+      // ── Project actions ─────────────────────────────
+      createProject: (input: {
+        name: string;
+        type: AuditType;
+        period: AuditPeriod;
+        bankPattern?: string;
+      }): string => {
         const id = generateId();
-        const session: Session = {
+        const project: AuditProject = {
           id,
-          name: file.fileName.replace(/\.(xlsx?|csv)$/i, ''),
-          fileName: file.fileName,
-          fileSize: file.fileSize,
+          name: input.name.trim() || 'Untitled Audit',
+          type: input.type,
+          period: input.period,
+          bankPattern: input.type === 'SINGLE_BANK' ? (input.bankPattern ?? '').trim() : undefined,
+          createdAt: new Date().toISOString(),
+          runIds: [],
+        };
+        set((state) => ({
+          projects: [project, ...state.projects],
+          activeProjectId: id,
+          activeRunId: null,
+        }));
+        return id;
+      },
+
+      updateProject: (id: string, updates: Partial<AuditProject>) => {
+        set((state) => ({
+          projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+        }));
+      },
+
+      deleteProject: (id: string) => {
+        set((state) => {
+          const runIds = state.projects.find((p) => p.id === id)?.runIds ?? [];
+          return {
+            projects: state.projects.filter((p) => p.id !== id),
+            runs: state.runs.filter((r) => !runIds.includes(r.id)),
+            activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
+            activeRunId: runIds.includes(state.activeRunId ?? '') ? null : state.activeRunId,
+            currentScreen:
+              state.activeProjectId === id ? 'projects' : state.currentScreen,
+          };
+        });
+      },
+
+      setActiveProject: (id: string | null) => {
+        set({ activeProjectId: id, activeRunId: null });
+      },
+
+      // ── Run actions ─────────────────────────────────
+      createRun: (input: { projectId: string; periodLabel: string; file: ParsedFile }): string => {
+        const id = generateId();
+        const project = get().projects.find((p) => p.id === input.projectId);
+        const runIndex = (project?.runIds.length ?? 0) + 1;
+        const run: AuditRun = {
+          id,
+          projectId: input.projectId,
+          runIndex,
+          periodLabel: input.periodLabel.trim() || `Run ${runIndex}`,
+          name: input.file.fileName.replace(/\.(xlsx?|csv)$/i, ''),
+          fileName: input.file.fileName,
+          fileSize: input.file.fileSize,
           uploadedAt: new Date().toISOString(),
           lastAnalysedAt: null,
           columnMap: {},
           validationReport: null,
           dataProfile: null,
-          analysisResults: null,
-          aiInsights: null,
+          ruleChecks: null,
           aiFlags: [],
           aiFlagSummary: null,
-          maturityScore: null,
           stage: 'uploaded',
-          hasDataInDuckDB: false,
+          hasDataInDB: false,
           analysisFilters: EMPTY_FILTERS,
         };
         set((state) => ({
-          sessions: [session, ...state.sessions],
-          activeSessionId: id,
+          runs: [run, ...state.runs],
+          projects: state.projects.map((p) =>
+            p.id === input.projectId ? { ...p, runIds: [...p.runIds, id] } : p
+          ),
+          activeRunId: id,
         }));
         return id;
       },
 
-      updateSession: (id: string, updates: Partial<Session>) => {
+      updateRun: (id: string, updates: Partial<AuditRun>) => {
         set((state) => ({
-          sessions: state.sessions.map((s) =>
-            s.id === id ? { ...s, ...updates } : s
-          ),
+          runs: state.runs.map((r) => (r.id === id ? { ...r, ...updates } : r)),
         }));
       },
 
-      deleteSession: (id: string) => {
-        set((state) => ({
-          sessions: state.sessions.filter((s) => s.id !== id),
-          activeSessionId:
-            state.activeSessionId === id ? null : state.activeSessionId,
-          currentScreen:
-            state.activeSessionId === id ? 'dashboard' : state.currentScreen,
-        }));
+      deleteRun: (id: string) => {
+        set((state) => {
+          const run = state.runs.find((r) => r.id === id);
+          return {
+            runs: state.runs.filter((r) => r.id !== id),
+            projects: state.projects.map((p) =>
+              p.id === run?.projectId
+                ? { ...p, runIds: p.runIds.filter((rid) => rid !== id) }
+                : p
+            ),
+            activeRunId: state.activeRunId === id ? null : state.activeRunId,
+          };
+        });
       },
 
-      setActiveSession: (id: string | null) => {
-        set({ activeSessionId: id });
+      setActiveRun: (id: string | null) => {
+        set({ activeRunId: id });
       },
 
+      // ── UI actions ──────────────────────────────────
       setScreen: (screen: Screen) => {
         set({ currentScreen: screen });
       },
@@ -89,31 +154,50 @@ export const useStore = create<AppState>()(
       },
     }),
     {
-      name: 'sap-auditor-v1',
-      // Only persist these keys — not transient UI state
+      name: STORAGE_KEYS.STORE,
       partialize: (state) => ({
-        sessions: state.sessions,
-        activeSessionId: state.activeSessionId,
+        projects: state.projects,
+        runs: state.runs,
+        activeProjectId: state.activeProjectId,
+        activeRunId: state.activeRunId,
         aiConfig: state.aiConfig,
       }),
     }
   )
 );
 
-/** Convenience hook: returns the currently active session or null */
-export const useActiveSession = () => {
-  const sessions = useStore((s) => s.sessions);
-  const activeSessionId = useStore((s) => s.activeSessionId);
-  const session = sessions.find((s) => s.id === activeSessionId) ?? null;
-  // Migration guards for sessions persisted before new fields were added
-  if (session && !session.analysisFilters) {
-    (session as any).analysisFilters = EMPTY_FILTERS;
+// ─────────────────────────────────────────────
+// Convenience selectors
+// ─────────────────────────────────────────────
+
+export function useActiveProject(): AuditProject | null {
+  const projects = useStore((s) => s.projects);
+  const activeProjectId = useStore((s) => s.activeProjectId);
+  return projects.find((p) => p.id === activeProjectId) ?? null;
+}
+
+export function useActiveRun(): AuditRun | null {
+  const runs = useStore((s) => s.runs);
+  const activeRunId = useStore((s) => s.activeRunId);
+  return runs.find((r) => r.id === activeRunId) ?? null;
+}
+
+export function useRunsForProject(projectId: string | null): AuditRun[] {
+  const runs = useStore((s) => s.runs);
+  if (!projectId) return [];
+  return runs
+    .filter((r) => r.projectId === projectId)
+    .sort((a, b) => a.runIndex - b.runIndex);
+}
+
+/** Returns true if the legacy v1 localStorage blob has any sessions in it. */
+export function hasArchivedV1Data(): boolean {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.LEGACY_STORE);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.state?.sessions) && parsed.state.sessions.length > 0;
+  } catch {
+    return false;
   }
-  if (session && !session.aiFlags) {
-    (session as any).aiFlags = [];
-  }
-  if (session && session.aiFlagSummary === undefined) {
-    (session as any).aiFlagSummary = null;
-  }
-  return session;
-};
+}

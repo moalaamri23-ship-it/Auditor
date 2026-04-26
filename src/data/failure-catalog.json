@@ -1,0 +1,3721 @@
+{
+  "version": 1,
+  "sourceHash": "f6709eb9fba905ea",
+  "generatedAt": "2026-04-26T00:00:00",
+  "rows": [
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Coating/Liner",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Corrosion Management System",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Corrosion Management System",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Corrosion Management System"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Corrosion Management System",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Desiccant",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Errosion",
+      "cause_code_description": "Deformation"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Gasket",
+      "damage_code_description": "Errosion",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Gasket",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Gasket",
+      "damage_code_description": "Fatigue",
+      "cause_code_description": "Breakage"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Gasket",
+      "damage_code_description": "Internal Leakage",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Gasket",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Gasket",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Internal Filter",
+      "damage_code_description": "Internal Components",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Internal Filter",
+      "damage_code_description": "Internal Components",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Internal Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Internal Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Internal Piping",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Internal Piping",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Isolation Valve",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Nozzle",
+      "damage_code_description": "Internal Components",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Nozzle",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Pressure Gauge",
+      "damage_code_description": "Failure to Function as Intended",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Sight Glass",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Tube",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Tube",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Tube",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Tube",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Vessel",
+      "object_part_code_description": "Tube",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Connections"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Deformation"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Dirty"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Improper Installation"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "No Power Output"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Erratic Output",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Erratic Output",
+      "cause_code_description": "Dirty"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Errosion",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Errosion",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Errosion",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "External Leakage - Process Medium",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "External Leakage - Utility Medium",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "External Leakage - Utility Medium",
+      "cause_code_description": "External Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Assembly/Installation Defect"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Connections"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Deformation"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "End of Life Cycle"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "External Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Internal Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "No Power Output"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Process/Manufacturing Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Internal Corrosion",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Internal Corrosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "End of Life Cycle"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "External Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Internal Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "No Power Output"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Mechanical Wear",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Mechanical Wear",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "No Output",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "No Output",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "No Output",
+      "cause_code_description": "No Power Output"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Unexpected Operation",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Unexpected Operation",
+      "cause_code_description": "Plugged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Abnormal Output - High",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Abnormal Output - Low",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Errosion",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Deformation"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "External Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Internal Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Start",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Start",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Start",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Start",
+      "cause_code_description": "External Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Fatigue",
+      "cause_code_description": "External Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Internal Corrosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Internal Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Mechanical Wear",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Gasket",
+      "damage_code_description": "External Leakage - Utility Medium",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Handle / Hand Wheel",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Liner",
+      "damage_code_description": "Fatigue",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Liner",
+      "damage_code_description": "Internal Corrosion",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Packing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Errosion",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Deformation"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Internal Leakage"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Fatigue",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Positioner",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Deformation",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Control Failure"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "STEM",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Valve",
+      "object_part_code_description": "STEM",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "UPS",
+      "object_part_code_description": "Battery",
+      "damage_code_description": "Failure to Operate",
+      "cause_code_description": "No Power Output"
+    },
+    {
+      "failure_catalog_desc": "UPS",
+      "object_part_code_description": "Battery",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "End of Life Cycle"
+    },
+    {
+      "failure_catalog_desc": "UPS",
+      "object_part_code_description": "Network Card",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Earth/Isolation Fault"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Analyzer",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Assembly/Installation Defect"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Analyzer",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Analyzer",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Material Defect"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Computer",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Assembly/Installation Defect"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Contact",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Faulty Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Detector",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Indicator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Assembly/Installation Defect"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Indicator",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Indicator",
+      "damage_code_description": "Erratic Output",
+      "cause_code_description": "Assembly/Installation Defect"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Design Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Maintenance Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Material Defect"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Process/Manufacturing Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Process/Manufacturing Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "High Output",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Meter",
+      "damage_code_description": "Failure to Operate",
+      "cause_code_description": "Over Current"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Probe",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Resistance Temperature Detector",
+      "damage_code_description": "Failure to Operate",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Switch",
+      "damage_code_description": "Failure to Indicate",
+      "cause_code_description": "Material Defect"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Switch",
+      "damage_code_description": "Failure to Start",
+      "cause_code_description": "No Signal/Indication"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Thermocouple",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Process/Manufacturing Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Thermocouple",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Material Defect"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Calibration"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Control Failure"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Faulty Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Faulty Signal/Indication"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Maintenance Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Process/Manufacturing Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Sensor"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Calibration"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Defective Circuit"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Faulty Signal/Indication"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "No Communication"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "High Output",
+      "cause_code_description": "Defective Circuit"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "High Output",
+      "cause_code_description": "Faulty Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "High Output",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Calibration"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Parameter Deviation",
+      "cause_code_description": "Faulty Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Parameter Deviation",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Spurious High Alarm Level",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Valve",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Transmitter",
+      "object_part_code_description": "Valve",
+      "damage_code_description": "Failure to Operate",
+      "cause_code_description": "Process/Manufacturing Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Transformer",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "Deformation",
+      "cause_code_description": "Deformation"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "Excessive Vibration",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Coating Internal/External",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Fitting",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Loose"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Ladder/Platform",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Breakage"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Roof",
+      "damage_code_description": "Parameter Deviation",
+      "cause_code_description": "Mechanical Damage"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Support or Base",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Support or Base",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Support or Base",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Valve",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Breakage"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Valve",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Tank",
+      "object_part_code_description": "Valve",
+      "damage_code_description": "External Leakage - Utility Medium",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Switchgear",
+      "object_part_code_description": "Breaker",
+      "damage_code_description": "Erratic",
+      "cause_code_description": "No Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Switchgear",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "End of Life Cycle"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Actuator",
+      "damage_code_description": "Mechanical Wear",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Contact",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Gauge",
+      "damage_code_description": "External Leakage - Process Medium",
+      "cause_code_description": "Material Defect"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Gauge",
+      "damage_code_description": "External Leakage - Utility Medium",
+      "cause_code_description": "Contamination"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Gauge",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Material Defect"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Process/Manufacturing Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "External Leakage - Utility Medium",
+      "cause_code_description": "Material Defect"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Assembly/Installation Defect"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Instrument",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Material Defect"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Switch",
+      "damage_code_description": "Failure to Close",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Switch",
+      "damage_code_description": "Failure to Close",
+      "cause_code_description": "Open Circuit"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Switch",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Control Failure"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Switch",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Material Defect"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Switch",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Switch",
+      "damage_code_description": "Failure to Provide Proper Output",
+      "cause_code_description": "Faulty Signal/Indication"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Switch",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Thermocouple",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Process/Manufacturing Deficiency"
+    },
+    {
+      "failure_catalog_desc": "Switch",
+      "object_part_code_description": "Tubing Line",
+      "damage_code_description": "External Leakage - Utility Medium",
+      "cause_code_description": "Loose"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Abnormal Output - High",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Abnormal Output - High",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Abnormal Output - Low",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Abnormal Output - Low",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Magnetic Pickup",
+      "damage_code_description": "Abnormal Output - Low",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Magnetic Pickup",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Faulty Signal/Indication"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Defective Circuit"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Failure to Alarm",
+      "cause_code_description": "Loose Connection"
+    },
+    {
+      "failure_catalog_desc": "Sensor",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Faulty Power/Voltage",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Rotor",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Rotor",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Valve",
+      "damage_code_description": "External Leakage - Process Medium",
+      "cause_code_description": "Connections"
+    },
+    {
+      "failure_catalog_desc": "Pump - Rotary Screw",
+      "object_part_code_description": "Valve",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Reciprocating Plunger",
+      "object_part_code_description": "Packing",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Packing"
+    },
+    {
+      "failure_catalog_desc": "Pump - Reciprocating Diaphragm",
+      "object_part_code_description": "Hose and Fitting",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Reciprocating Diaphragm",
+      "object_part_code_description": "Pump",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Contamination"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Balance",
+      "cause_code_description": "Mechanical Damage"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Case/Volute",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Case/Volute",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Case/Volute",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Failure to Start on Demand",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "High Output",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Impeller",
+      "damage_code_description": "Erratic Output",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Impeller",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Impeller",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Impeller",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Impeller",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Impeller",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Impeller",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Impeller",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Contamination"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Impeller",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Packing",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Packing",
+      "damage_code_description": "Internal Corrosion",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Packing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Packing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Packing"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Packing",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Packing"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Packing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Power Frame",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Power Frame",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Breakage"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "External Leakage - Utility Medium",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Breakage"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Fatigue",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Internal Corrosion",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Cavitation"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "External Leakage"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Internal Leakage"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Seal Gland",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Shaft",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Shaft",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Pump - Centrifugal",
+      "object_part_code_description": "Shaft",
+      "damage_code_description": "Not Working",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Process Piping",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Process Piping",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Process Piping",
+      "object_part_code_description": "Valve",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pressure Relief Device",
+      "object_part_code_description": "Body",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pressure Relief Device",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Pressure Relief Device",
+      "object_part_code_description": "Disk",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pressure Relief Device",
+      "object_part_code_description": "Disk",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Internal Leakage"
+    },
+    {
+      "failure_catalog_desc": "Pressure Relief Device",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pressure Relief Device",
+      "object_part_code_description": "Seat",
+      "damage_code_description": "Fatigue",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Pressure Relief Device",
+      "object_part_code_description": "Spring",
+      "damage_code_description": "Mechanical Wear",
+      "cause_code_description": "Internal Leakage"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Coating Internal/External",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Coating Internal/External",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Fastener/Bolt",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Fittings/Flange",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Fittings/Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Fittings/Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Fittings/Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Valve",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Pipeline",
+      "object_part_code_description": "Valve",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Overhead Crane",
+      "object_part_code_description": "Limit Switch",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Excessive Vibration",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Motor Load"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Lubrication"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Cooling Fan",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Cooling Fan",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Cooling Fan",
+      "damage_code_description": "Failure to Start",
+      "cause_code_description": "Loose Connection"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Cooling Fan",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Cooling Fan",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Motor Protection Device"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Cooling Fan",
+      "damage_code_description": "Short Circuiting",
+      "cause_code_description": "No Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Exciter Component",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Filter",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Housing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Rotor",
+      "damage_code_description": "Erratic Output",
+      "cause_code_description": "Motor Load"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Rotor",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Rotor",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Motor Load"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Rotor",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Rotor",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Lubrication"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Rotor",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Sensor",
+      "damage_code_description": "Failure to Close",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Sensor",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Faulty Signal/Indication"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Sensor",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Stator",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Loose Connection"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Winding",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Winding",
+      "damage_code_description": "Breakdown",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Winding",
+      "damage_code_description": "Breakdown",
+      "cause_code_description": "Motor Load"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Wire",
+      "damage_code_description": "Erratic Output",
+      "cause_code_description": "Dirty"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Wire",
+      "damage_code_description": "Erratic Output",
+      "cause_code_description": "Loose"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Wire",
+      "damage_code_description": "Failure to Close",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Wire",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Burnt"
+    },
+    {
+      "failure_catalog_desc": "Motor",
+      "object_part_code_description": "Wire",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Meter",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Meter",
+      "object_part_code_description": "Meter",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Meter",
+      "object_part_code_description": "Meter",
+      "damage_code_description": "Failure to Operate",
+      "cause_code_description": "Firmware"
+    },
+    {
+      "failure_catalog_desc": "Meter",
+      "object_part_code_description": "Wire",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Faulty Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Indicator",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Indicator",
+      "object_part_code_description": "Solenoid",
+      "damage_code_description": "No Output",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Indicator",
+      "object_part_code_description": "Tubing Line",
+      "damage_code_description": "Plugged",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "AC HVAC",
+      "damage_code_description": "Not Working",
+      "cause_code_description": "Breakage"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "AC HVAC",
+      "damage_code_description": "Not Working",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "AC HVAC",
+      "damage_code_description": "Not Working",
+      "cause_code_description": "End of Life Cycle"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "AC HVAC",
+      "damage_code_description": "Not Working",
+      "cause_code_description": "Internal Components"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "AC HVAC",
+      "damage_code_description": "Not Working",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "AC HVAC",
+      "damage_code_description": "Not Working",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Compressor",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Compressor",
+      "damage_code_description": "Not Working",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Compressor",
+      "damage_code_description": "Not Working",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Compressor",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Delayed Operation",
+      "cause_code_description": "Faulty Signal/Indication"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Erratic",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Erratic",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Erratic Speed",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "End of Life Cycle"
+    },
+    {
+      "failure_catalog_desc": "HVAC",
+      "object_part_code_description": "Filter",
+      "damage_code_description": "Intermittent",
+      "cause_code_description": "Loose Connection"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "Deformation",
+      "cause_code_description": "Deformation"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "Failure to Close",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Over Pressure"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Burner",
+      "damage_code_description": "Deformation",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Burner",
+      "damage_code_description": "Internal Components",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Burner",
+      "damage_code_description": "Parameter Deviation",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Burner",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Exhaust Stack",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Deformation",
+      "cause_code_description": "Mechanical Damage"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Erosion"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "External Leakage"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Flange",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Fuel System",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Fuel System",
+      "damage_code_description": "Failure to Start on Demand",
+      "cause_code_description": "Cavitation"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Fuel System",
+      "damage_code_description": "Failure to Start on Demand",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Fuel System",
+      "damage_code_description": "Failure to Stop on Demand",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Fuel System",
+      "damage_code_description": "Leak",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Failure to Close",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Failure to Open",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Hose and Fitting",
+      "damage_code_description": "High Output",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Ignition System",
+      "damage_code_description": "Failure to Start on Demand",
+      "cause_code_description": "Control Failure"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Ignition System",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Sight Glass",
+      "damage_code_description": "Failure to Operate",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Sight Glass",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Sight Glass",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Tube/Coil",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Tube/Coil",
+      "damage_code_description": "Internal Leakage",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Heater & Boiler",
+      "object_part_code_description": "Tube/Coil",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Open Circuit"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Balance",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Body/Shell",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Cover Plate",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Cover Plate",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Excessive Vibration",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Faulty Power/Voltage",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Flange /Nozzle",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Heat Exchanger",
+      "object_part_code_description": "Piping",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Automatic Transfer Switch",
+      "damage_code_description": "Intermittent",
+      "cause_code_description": "Faulty Signal/Indication"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Battery",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Internal Damage"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Battery",
+      "damage_code_description": "Failure to Operate",
+      "cause_code_description": "Connections"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Battery",
+      "damage_code_description": "Failure to Start on Demand",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Battery",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Connector",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Generator",
+      "damage_code_description": "Not Working",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Oil",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Control Failure"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Sensor",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Sensor",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Control Failure"
+    },
+    {
+      "failure_catalog_desc": "Generator",
+      "object_part_code_description": "Sensor",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Alarm",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Alarm",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Sensor"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Alarm",
+      "damage_code_description": "Failure to Alarm",
+      "cause_code_description": "Faulty Signal/Indication"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Alarm",
+      "damage_code_description": "Failure to Alarm",
+      "cause_code_description": "Open Circuit"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Alarm",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Calibration"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Alarm",
+      "damage_code_description": "Failure to Indicate",
+      "cause_code_description": "Sensor"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Alarm",
+      "damage_code_description": "High Output",
+      "cause_code_description": "Calibration"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Alarm",
+      "damage_code_description": "No Reading",
+      "cause_code_description": "Sensor"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Alarm",
+      "damage_code_description": "Open Circuit",
+      "cause_code_description": "Open Circuit"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Detector Head",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Display",
+      "damage_code_description": "No Output",
+      "cause_code_description": "No Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Fuse",
+      "damage_code_description": "Failure to Alarm",
+      "cause_code_description": "Power Supply"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Sensor"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Faulty Signal/Indication"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Fire/Gas Detector",
+      "object_part_code_description": "Transmitter",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Sensor"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Body",
+      "damage_code_description": "Errosion",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Drain",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "External Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Drain",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Drain",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Contamination"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Break"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Erratic Output",
+      "cause_code_description": "Break"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Erratic Output",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Failure to Function as Intended",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Failure to Function on Demand",
+      "cause_code_description": "Improper Operation"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "No Output",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Element",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Filter Shell",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Filter Shell",
+      "damage_code_description": "Plugged/Choked",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Fitting",
+      "damage_code_description": "Internal Leakage",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Fitting",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Cracking"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Fitting",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Loose"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Flanged Joint/Nozzle",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Over Pressure"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Flanged Joint/Nozzle",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Abnormal Instrument Reading",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Failure to Function as Intended",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Internal Leakage",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Gasket/O-Ring",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Housing",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Housing",
+      "damage_code_description": "Internal Corrosion/Erosion",
+      "cause_code_description": "Internal Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Housing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Errosion",
+      "cause_code_description": "Erosion"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Internal Leakage"
+    },
+    {
+      "failure_catalog_desc": "Filter/Strainer",
+      "object_part_code_description": "Vent",
+      "damage_code_description": "Deformation",
+      "cause_code_description": "Blockage/Plugged"
+    },
+    {
+      "failure_catalog_desc": "Fan",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Alignment",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Fan",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Fan",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Fan",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Fan",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Erosion"
+    },
+    {
+      "failure_catalog_desc": "Fan",
+      "object_part_code_description": "Drive Line",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Fan",
+      "object_part_code_description": "Gearbox",
+      "damage_code_description": "Failure to Start on Demand",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Electric Heater",
+      "object_part_code_description": "Heating Element",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "No Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Controller",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Controller",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Failure to Indicate",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Controller",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Failure to Start",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Controller",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Open Circuit",
+      "cause_code_description": "Open Circuit"
+    },
+    {
+      "failure_catalog_desc": "Control Panel",
+      "object_part_code_description": "Breaker",
+      "damage_code_description": "Failure to Open",
+      "cause_code_description": "Faulty Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Rotary",
+      "object_part_code_description": "Compressor",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Rotary",
+      "object_part_code_description": "Compressor",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Rotary",
+      "object_part_code_description": "Compressor",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Rotary",
+      "object_part_code_description": "Compressor",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Rotary",
+      "object_part_code_description": "Coupling",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Corrosion"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Rotary",
+      "object_part_code_description": "Lubrication System",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Rotary",
+      "object_part_code_description": "Lubrication System",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Rotary",
+      "object_part_code_description": "Oil Separator",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Rotary",
+      "object_part_code_description": "Rotor",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Barring Rig",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Alignment",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Alignment",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Balance",
+      "cause_code_description": "Cavitation"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Erratic Output",
+      "cause_code_description": "Over Pressure"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Over Pressure"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Belt",
+      "damage_code_description": "Noise",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Bolting",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Contamination"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Connecting Rod",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Crank Shaft",
+      "damage_code_description": "Seizure",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Dog House",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Filter",
+      "damage_code_description": "Breakdown",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Filter",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Filter",
+      "damage_code_description": "High Output",
+      "cause_code_description": "Loose Connection"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Filter",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Filter",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Filter",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Gasket",
+      "damage_code_description": "External Corrosion",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Gasket",
+      "damage_code_description": "External Leakage - Utility Medium",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Gasket",
+      "damage_code_description": "Leakage in Closed Position",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Lubrication System",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Reciprocating",
+      "object_part_code_description": "Lubrication System",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Centrifugal",
+      "object_part_code_description": "Bearing/Bushing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Alignment/Clearance"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Centrifugal",
+      "object_part_code_description": "Filter",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Centrifugal",
+      "object_part_code_description": "Lubrication System",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Looseness"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Centrifugal",
+      "object_part_code_description": "Seal",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Compressor - Centrifugal",
+      "object_part_code_description": "Seal Oil/Gas System",
+      "damage_code_description": "Leak",
+      "cause_code_description": "Leak"
+    },
+    {
+      "failure_catalog_desc": "Communication Tower",
+      "object_part_code_description": "Guy Wire System - Anchor Guards",
+      "damage_code_description": "Structural",
+      "cause_code_description": "External Damage"
+    },
+    {
+      "failure_catalog_desc": "Communication Tower",
+      "object_part_code_description": "Power Supply",
+      "damage_code_description": "Delayed Operation",
+      "cause_code_description": "Defective Circuit"
+    },
+    {
+      "failure_catalog_desc": "Communication Tower",
+      "object_part_code_description": "Radio",
+      "damage_code_description": "Loose",
+      "cause_code_description": "Earth/Isolation Fault"
+    },
+    {
+      "failure_catalog_desc": "Combustion Engine - Diesel",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "External Leakage",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Combustion Engine - Diesel",
+      "object_part_code_description": "Cooling System",
+      "damage_code_description": "Broken/Cracked/Corroded/Damaged",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "Combustion Engine - Diesel",
+      "object_part_code_description": "Cooling System",
+      "damage_code_description": "Overheating",
+      "cause_code_description": "Overheating"
+    },
+    {
+      "failure_catalog_desc": "Combustion Engine - Diesel",
+      "object_part_code_description": "Starting Unit",
+      "damage_code_description": "Failure to Start on Demand",
+      "cause_code_description": "Fatigue"
+    },
+    {
+      "failure_catalog_desc": "Circuit Breaker",
+      "object_part_code_description": "Coil",
+      "damage_code_description": "Excessive Vibration",
+      "cause_code_description": "No Power/Voltage"
+    },
+    {
+      "failure_catalog_desc": "Circuit Breaker",
+      "object_part_code_description": "Contact",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Assembly/Installation Defect"
+    },
+    {
+      "failure_catalog_desc": "Blower",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Blower",
+      "object_part_code_description": "Bearing",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Blower",
+      "object_part_code_description": "Drive Line",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Damaged"
+    },
+    {
+      "failure_catalog_desc": "Blower",
+      "object_part_code_description": "Drive Line",
+      "damage_code_description": "Low Output",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Blower",
+      "object_part_code_description": "Drive Line",
+      "damage_code_description": "Vibration",
+      "cause_code_description": "Wear"
+    },
+    {
+      "failure_catalog_desc": "Blower",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Failure to Function",
+      "cause_code_description": "Vibration"
+    },
+    {
+      "failure_catalog_desc": "Blower",
+      "object_part_code_description": "Fan",
+      "damage_code_description": "Loose",
+      "cause_code_description": "No Power/Voltage"
+    }
+  ]
+}

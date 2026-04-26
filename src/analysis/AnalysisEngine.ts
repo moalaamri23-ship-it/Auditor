@@ -1,108 +1,95 @@
-/**
- * Analysis Engine
- *
- * Orchestrates all analysis modules and assembles the final AnalysisResults.
- * Creates v_analysis_scope from active filters before running modules — all
- * modules query v_analysis_scope, never v_wo_primary directly.
- *
- * If aiConfig is provided (and has an apiKey), also runs AITextModule which
- * sends WO text fields in batches to the AI for per-record flagging.
- */
+// Audit pipeline orchestrator.
+//
+//   1. createAnalysisScopeView() — applies project bank pattern + run filters
+//      and produces v_analysis_scope (the WO-level subset every check operates on).
+//   2. runRuleChecks()           — pure DB SQL pre-checks.
+//   3. runAITextModule()         — catalog-aware semantic checks, scoped to
+//                                  the rule-flagged subset (or all WOs if
+//                                  no rule flags exist and AI is enabled).
+//
+// The function is interruptible via cancelRef for the AI phase.
 
-import { runDataIntegrityModule } from './DataIntegrityModule';
-import { runReliabilityModule }   from './ReliabilityModule';
-import { runProcessModule }       from './ProcessModule';
-import { runAITextModule }        from './AITextModule';
+import { runRuleChecks } from './RuleChecksModule';
+import { runAITextModule } from './AITextModule';
 import { createAnalysisScopeView } from '../services/DuckDBService';
-import {
-  computeMaturityScore,
-  maturityGrade,
-  type AnalysisResults,
-} from './analysisTypes';
-import type { ColumnMap, AnalysisFilters, AIConfig } from '../types';
+import type {
+  ColumnMap, AnalysisFilters, AIConfig, AuditProject,
+  RuleCheckResult, AIFlagSummary,
+} from '../types';
 import { EMPTY_FILTERS } from '../types';
+import type { AnalysisResults } from './analysisTypes';
 
-export interface RunAllModulesOptions {
-  sessionId:    string;
-  columnMap:    ColumnMap;
-  filters?:     AnalysisFilters;
-  aiConfig?:    AIConfig;
+export interface RunPipelineOptions {
+  runId: string;
+  project: AuditProject | null;
+  columnMap: ColumnMap;
+  filters?: AnalysisFilters;
+  aiConfig?: AIConfig;
+  catalogAvailable: boolean;
+  /** Skip the AI phase (pre-checks-only, for the dedicated PreChecks screen). */
+  ruleChecksOnly?: boolean;
   onAIProgress?: (processed: number, total: number) => void;
-  cancelRef?:   { current: boolean };
+  cancelRef?: { current: boolean };
 }
 
-export async function runAllModules(
-  sessionIdOrOpts: string | RunAllModulesOptions,
-  columnMapArg?:   ColumnMap,
-  filtersArg?:     AnalysisFilters
-): Promise<AnalysisResults> {
+export interface PipelineOutput {
+  results: AnalysisResults;
+  scopeWOCount: number;
+  ruleChecks: RuleCheckResult;
+  aiFlagSummary: AIFlagSummary | null;
+}
 
-  // Support both calling styles:
-  //   runAllModules(sessionId, columnMap, filters)          ← legacy
-  //   runAllModules({ sessionId, columnMap, filters, ... }) ← new
-  let sessionId: string;
-  let columnMap: ColumnMap;
-  let filters: AnalysisFilters;
-  let aiConfig: AIConfig | undefined;
-  let onAIProgress: ((p: number, t: number) => void) | undefined;
-  let cancelRef: { current: boolean };
+export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineOutput> {
+  const {
+    runId,
+    project,
+    columnMap,
+    catalogAvailable,
+    ruleChecksOnly,
+    onAIProgress,
+  } = opts;
+  const filters = opts.filters ?? EMPTY_FILTERS;
+  const cancelRef = opts.cancelRef ?? { current: false };
+  const aiConfig = opts.aiConfig;
 
-  if (typeof sessionIdOrOpts === 'string') {
-    sessionId    = sessionIdOrOpts;
-    columnMap    = columnMapArg!;
-    filters      = filtersArg ?? EMPTY_FILTERS;
-    cancelRef    = { current: false };
-  } else {
-    sessionId    = sessionIdOrOpts.sessionId;
-    columnMap    = sessionIdOrOpts.columnMap;
-    filters      = sessionIdOrOpts.filters ?? EMPTY_FILTERS;
-    aiConfig     = sessionIdOrOpts.aiConfig;
-    onAIProgress = sessionIdOrOpts.onAIProgress;
-    cancelRef    = sessionIdOrOpts.cancelRef ?? { current: false };
-  }
+  const scopeWOCount = await createAnalysisScopeView(filters, columnMap, project);
 
-  // Build the scoped view — all modules query v_analysis_scope
-  const scopeWOCount = await createAnalysisScopeView(filters, columnMap);
+  const ruleChecks = await runRuleChecks({ columnMap, catalogAvailable });
 
-  const [dataIntegrity, reliability, process] = await Promise.all([
-    runDataIntegrityModule(columnMap),
-    runReliabilityModule(columnMap),
-    runProcessModule(columnMap),
-  ]);
+  let aiFlagSummary: AIFlagSummary | null = null;
+  const aiEnabled =
+    !ruleChecksOnly &&
+    aiConfig &&
+    (aiConfig.apiKey?.trim() || aiConfig.provider === 'copilot') &&
+    scopeWOCount > 0;
 
-  const modules = [dataIntegrity, reliability, process];
-
-  const maturity = computeMaturityScore(modules);
-  const grade    = maturityGrade(maturity);
-  const totalAnomalies = modules.reduce((s, m) => s + m.anomalies.length, 0);
-
-  const results: AnalysisResults = {
-    sessionId,
-    maturityScore:  maturity,
-    maturityGrade:  grade,
-    modules,
-    totalAnomalies,
-    scopeWOCount,
-    filters,
-    computedAt: new Date().toISOString(),
-  };
-
-  // ── AI text analysis (optional) ──────────────────────────────────────────
-  if ((aiConfig?.apiKey?.trim() || aiConfig?.provider === 'copilot') && scopeWOCount > 0) {
+  if (aiEnabled) {
     try {
-      const summary = await runAITextModule({
-        sessionId,
+      const flaggedSet = new Set(ruleChecks.flaggedWOs.map((f) => f.wo));
+      const scopeWOs = flaggedSet.size > 0 ? Array.from(flaggedSet) : undefined;
+      aiFlagSummary = await runAITextModule({
+        runId,
         columnMap,
         aiConfig,
+        catalogAvailable,
+        scopeWOs,
         scopeWOCount,
         onProgress: onAIProgress ?? (() => {}),
         cancelRef,
       });
-      results.aiFlagSummary = summary;
-    } catch {
-      // AI phase failure is non-fatal — DuckDB results are still valid
+    } catch (err) {
+      console.warn('AI text module failed', err);
     }
   }
 
-  return results;
+  const results: AnalysisResults = {
+    runId,
+    scopeWOCount,
+    filters,
+    ruleChecks,
+    aiFlagSummary,
+    computedAt: new Date().toISOString(),
+  };
+
+  return { results, scopeWOCount, ruleChecks, aiFlagSummary };
 }

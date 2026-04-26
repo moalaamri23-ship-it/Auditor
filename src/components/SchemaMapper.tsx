@@ -1,57 +1,56 @@
 import React, { useState, useCallback } from 'react';
 import Icon from './Icon';
-import { useStore, useActiveSession } from '../store/useStore';
+import { useStore, useActiveRun } from '../store/useStore';
 import { ParsedDataCache } from '../services/ParsedDataCache';
-import { loadData, runProfiling, restoreAIFlagsFromSession } from '../services/DuckDBService';
+import { loadData, runProfiling, restoreAIFlagsFromRun } from '../services/DuckDBService';
+import { ensureCatalogLoaded } from '../services/FailureCatalogService';
 import type { CanonicalColumn, ColumnMap } from '../types';
 import {
   COLUMN_LABELS,
   IDENTIFIER_COLUMNS,
   TIMESTAMP_COLUMNS,
   TEXT_COLUMNS,
-  RELIABILITY_CODE_COLUMNS,
-  STATUS_COLUMNS,
+  CODE_DESCRIPTION_COLUMNS,
 } from '../constants';
 
-// Column group definitions for display
+const STATUS_COLUMNS_NONE: CanonicalColumn[] = []; // no status fields in new schema
+const TEXT_NON_CODE: CanonicalColumn[] = TEXT_COLUMNS.filter(
+  (c) => !CODE_DESCRIPTION_COLUMNS.includes(c) && c !== 'code_group',
+);
+
 const COLUMN_GROUPS: { label: string; cols: CanonicalColumn[] }[] = [
-  { label: '🔑 Identifiers',             cols: IDENTIFIER_COLUMNS        },
-  { label: '🕒 Timestamps',              cols: TIMESTAMP_COLUMNS         },
-  { label: '📝 Text Fields',             cols: TEXT_COLUMNS              },
-  { label: '🏷 Reliability Codes',       cols: RELIABILITY_CODE_COLUMNS  },
-  { label: '⚙️ Status Fields',           cols: STATUS_COLUMNS            },
+  { label: 'Identifiers', cols: IDENTIFIER_COLUMNS },
+  { label: 'Date', cols: TIMESTAMP_COLUMNS },
+  { label: 'Description & Equipment', cols: ['work_order_description', 'work_center', 'equipment_description', 'functional_location_description', 'operation_description'] as CanonicalColumn[] },
+  { label: 'Failure Codes (Description Form)', cols: CODE_DESCRIPTION_COLUMNS },
+  { label: 'Confirmation', cols: ['confirmation_text', 'confirmation_long_text'] as CanonicalColumn[] },
+  { label: 'Scoping Template', cols: ['code_group'] as CanonicalColumn[] },
 ];
 
-// Using string so TypeScript doesn't narrow the comparison exhaustively
-type LoadStage = string;
+type LoadStage = 'idle' | 'loading' | 'profiling' | 'done' | 'error';
 
 export default function SchemaMapper() {
-  const session = useActiveSession();
-  const { updateSession, setScreen } = useStore();
+  const run = useActiveRun();
+  const { updateRun, setScreen } = useStore();
 
-  const [localMap, setLocalMap] = useState<ColumnMap>(session?.columnMap ?? {});
+  const [localMap, setLocalMap] = useState<ColumnMap>(run?.columnMap ?? {});
   const [loadStage, setLoadStage] = useState<LoadStage>('idle');
   const [errorMsg, setErrorMsg] = useState('');
 
-  if (!session) {
+  if (!run) {
     return (
       <div className="flex items-center justify-center h-full text-slate-400 text-sm">
-        No active session.
+        No active audit run.
       </div>
     );
   }
 
-  // Get available headers from the cache
-  const cachedData = ParsedDataCache.get(session.id);
+  const cachedData = ParsedDataCache.get(run.id);
   const availableHeaders: string[] = cachedData?.headers ?? [];
-
-  // ── Map a canonical column to a raw header ────────────────────────────────
 
   const setMapping = (canonical: CanonicalColumn, rawHeader: string) => {
     setLocalMap((prev) => ({ ...prev, [canonical]: rawHeader || undefined }));
   };
-
-  // ── Load to DuckDB and run profiling ──────────────────────────────────────
 
   const handleLoad = useCallback(async () => {
     if (!cachedData) {
@@ -64,47 +63,39 @@ export default function SchemaMapper() {
     setErrorMsg('');
 
     try {
-      // Persist updated column map
-      updateSession(session.id, { columnMap: localMap, stage: 'mapped' });
+      updateRun(run.id, { columnMap: localMap, stage: 'mapped' });
 
-      // Load into DuckDB
       await loadData(cachedData.rows, localMap);
 
-      // Restore AI flags table if this session has previously computed flags
-      if (session.aiFlags?.length > 0) {
-        await restoreAIFlagsFromSession(session.aiFlags).catch(() => {});
+      // Ensure catalog is loaded for catalog-aware checks downstream
+      await ensureCatalogLoaded().catch(() => {});
+
+      if (run.aiFlags?.length > 0) {
+        await restoreAIFlagsFromRun(run.aiFlags).catch(() => {});
       }
 
       setLoadStage('profiling');
-
-      // Run profiling
       const profile = await runProfiling(localMap);
 
-      // Persist results
-      updateSession(session.id, {
+      updateRun(run.id, {
         dataProfile: profile,
         stage: 'profiled',
-        hasDataInDuckDB: true,
+        hasDataInDB: true,
         lastAnalysedAt: new Date().toISOString(),
       });
 
-      // Clear cache (no longer needed — data is in DuckDB)
       ParsedDataCache.clear();
 
       setLoadStage('done');
       setScreen('profiler');
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to load data into DuckDB.');
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to load data into the Database.');
       setLoadStage('error');
     }
-  }, [cachedData, localMap, session.id, updateSession, setScreen]);
-
-  // ── Count mapping stats ───────────────────────────────────────────────────
+  }, [cachedData, localMap, run.id, run.aiFlags, updateRun, setScreen]);
 
   const mappedCount = Object.values(localMap).filter(Boolean).length;
   const totalCols = Object.keys(COLUMN_LABELS).length;
-
-  // ── Loading overlay ───────────────────────────────────────────────────────
 
   if (loadStage === 'loading' || loadStage === 'profiling') {
     return (
@@ -120,12 +111,10 @@ export default function SchemaMapper() {
         </div>
         <div className="text-center">
           <div className="font-semibold text-slate-700">
-            {loadStage === 'loading'   && 'Loading data into DuckDB…'}
+            {loadStage === 'loading' && 'Loading data into the Database…'}
             {loadStage === 'profiling' && 'Running data profiling queries…'}
           </div>
-          <div className="text-xs text-slate-400 mt-1">
-            This runs entirely in your browser.
-          </div>
+          <div className="text-xs text-slate-400 mt-1">This runs entirely in your browser.</div>
         </div>
       </div>
     );
@@ -133,12 +122,10 @@ export default function SchemaMapper() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
-
-      {/* ── Page header ── */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-slate-900">Review Column Mapping</h1>
         <p className="text-sm text-slate-500 mt-1">
-          The system has automatically detected your SAP Records column names. Review and adjust before loading.
+          The system has detected your SAP column names. Review and adjust before loading.
         </p>
         <div className="mt-2 flex items-center gap-2">
           <div className="text-xs font-bold text-slate-500">
@@ -152,7 +139,6 @@ export default function SchemaMapper() {
         </div>
       </div>
 
-      {/* ── Column groups ── */}
       <div className="space-y-6 mb-8">
         {COLUMN_GROUPS.map((group) => (
           <div key={group.label} className="bg-white rounded shadow border border-slate-200 overflow-hidden">
@@ -174,7 +160,6 @@ export default function SchemaMapper() {
         ))}
       </div>
 
-      {/* ── Error ── */}
       {loadStage === 'error' && errorMsg && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
           <Icon name="alertCircle" className="w-5 h-5 text-red-500 shrink-0" />
@@ -182,7 +167,6 @@ export default function SchemaMapper() {
         </div>
       )}
 
-      {/* ── Actions ── */}
       <div className="flex gap-3">
         <button
           onClick={() => setScreen('upload')}
@@ -194,22 +178,20 @@ export default function SchemaMapper() {
 
         <button
           onClick={handleLoad}
-          disabled={loadStage === 'loading' || loadStage === 'profiling'}
+          disabled={(loadStage as string) === 'loading' || (loadStage as string) === 'profiling'}
           className="bg-slate-900 text-white px-6 py-2 rounded font-bold flex items-center gap-2 hover:bg-slate-800 transition text-sm disabled:opacity-50"
         >
           <Icon name="database" className="w-4 h-4" />
-          Load & Profile Data
+          Load &amp; Profile Data
         </button>
       </div>
 
       <p className="mt-3 text-xs text-slate-400">
-        Confirming this mapping loads your data into DuckDB. Analysis starts immediately.
+        Confirming this mapping loads your data into the Database. Profiling starts immediately.
       </p>
     </div>
   );
 }
-
-// ─── Individual column row ────────────────────────────────────────────────────
 
 function ColumnRow({
   canonical,
@@ -225,47 +207,45 @@ function ColumnRow({
   const label = COLUMN_LABELS[canonical];
   const isMapped = !!currentValue;
 
-  // Column category for badge
-  const category =
-    IDENTIFIER_COLUMNS.includes(canonical) ? 'id' :
-    TIMESTAMP_COLUMNS.includes(canonical)  ? 'date' :
-    TEXT_COLUMNS.includes(canonical)       ? 'text' :
-    RELIABILITY_CODE_COLUMNS.includes(canonical) ? 'code' :
-    'status';
+  const category = IDENTIFIER_COLUMNS.includes(canonical)
+    ? 'id'
+    : TIMESTAMP_COLUMNS.includes(canonical)
+      ? 'date'
+      : CODE_DESCRIPTION_COLUMNS.includes(canonical)
+        ? 'code'
+        : canonical === 'code_group'
+          ? 'scope'
+          : TEXT_NON_CODE.includes(canonical)
+            ? 'text'
+            : 'status';
 
   const CATEGORY_BADGE: Record<string, string> = {
-    id:     'bg-blue-100 text-blue-700',
-    date:   'bg-purple-100 text-purple-700',
-    text:   'bg-teal-100 text-teal-700',
-    code:   'bg-amber-100 text-amber-700',
+    id: 'bg-blue-100 text-blue-700',
+    date: 'bg-purple-100 text-purple-700',
+    text: 'bg-teal-100 text-teal-700',
+    code: 'bg-amber-100 text-amber-700',
+    scope: 'bg-violet-100 text-violet-700',
     status: 'bg-slate-100 text-slate-600',
   };
 
-  const REQUIRED_COLS: CanonicalColumn[] = ['work_order_number'];
+  const REQUIRED_COLS: CanonicalColumn[] = ['work_order_number', 'work_order_description', 'notification_date'];
   const isRequired = REQUIRED_COLS.includes(canonical);
 
   return (
     <div className="flex items-center px-4 py-3 gap-4">
-      {/* Mapped indicator */}
       <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isMapped ? 'bg-green-400' : 'bg-slate-300'}`} />
-
-      {/* Canonical name */}
-      <div className="w-48 shrink-0">
+      <div className="w-56 shrink-0">
         <div className="text-sm font-semibold text-slate-700">
           {label}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
         </div>
         <div className="text-[10px] font-mono text-slate-400">{canonical}</div>
       </div>
-
-      {/* Type badge */}
       <div className="w-16 shrink-0">
         <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${CATEGORY_BADGE[category]}`}>
           {category}
         </span>
       </div>
-
-      {/* Mapping select */}
       <div className="flex-1">
         {headers.length > 0 ? (
           <select
@@ -275,7 +255,9 @@ function ColumnRow({
           >
             <option value="">— not mapped —</option>
             {headers.map((h) => (
-              <option key={h} value={h}>{h}</option>
+              <option key={h} value={h}>
+                {h}
+              </option>
             ))}
           </select>
         ) : (
@@ -291,3 +273,6 @@ function ColumnRow({
     </div>
   );
 }
+
+// `STATUS_COLUMNS_NONE` retained for future expansion / compatibility.
+export { STATUS_COLUMNS_NONE };

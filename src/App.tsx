@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import Header from './components/Header';
-import SessionsDashboard from './components/SessionsDashboard';
+import ProjectsDashboard from './components/SessionsDashboard';
+import AuditInitWizard from './components/AuditInitWizard';
 import UploadZone from './components/UploadZone';
 import SchemaMapper from './components/SchemaMapper';
 import DataProfiler from './components/DataProfiler';
+import PreChecksView from './components/PreChecksView';
 import AuditDashboard from './components/AuditDashboard';
-import AnalysisView from './components/AnalysisView';
+import ComparisonView from './components/ComparisonView';
 import IssueExplorer from './components/IssueExplorer';
 import SettingsScreen from './components/SettingsScreen';
-import AIInsightsPanel from './components/AIInsightsPanel';
 import { useStore } from './store/useStore';
-import { initDuckDB } from './services/DuckDBService';
+import { initDB } from './services/DuckDBService';
+import { ensureCatalogLoaded } from './services/FailureCatalogService';
 
 type DBState = 'loading' | 'ready' | 'error';
 
@@ -19,15 +21,14 @@ export default function App() {
   const [dbState, setDbState] = useState<DBState>('loading');
   const [dbError, setDbError] = useState('');
 
-  // Initialise DuckDB WASM on mount — once, singleton
   useEffect(() => {
-    initDuckDB()
-      .then(() => {
-        // DuckDB is in-memory — reset all sessions' hasDataInDuckDB flag so
-        // users are prompted to re-upload rather than running queries on empty tables.
-        const { sessions, updateSession } = useStore.getState();
-        sessions.forEach(s => {
-          if (s.hasDataInDuckDB) updateSession(s.id, { hasDataInDuckDB: false });
+    initDB()
+      .then(async () => {
+        await ensureCatalogLoaded().catch(() => {});
+        // Database is in-memory — runs lose their data on refresh
+        const { runs, updateRun } = useStore.getState();
+        runs.forEach((r) => {
+          if (r.hasDataInDB) updateRun(r.id, { hasDataInDB: false });
         });
         setDbState('ready');
       })
@@ -37,7 +38,6 @@ export default function App() {
       });
   }, []);
 
-  // ── DuckDB error screen ────────────────────────────────────────────────────
   if (dbState === 'error') {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50 font-sans">
@@ -45,7 +45,7 @@ export default function App() {
           <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-2xl">⚠️</span>
           </div>
-          <div className="font-bold text-red-700 text-lg mb-2">DuckDB Failed to Load</div>
+          <div className="font-bold text-red-700 text-lg mb-2">Database Failed to Load</div>
           <div className="text-sm text-slate-500 mb-4">{dbError}</div>
           <div className="text-xs text-slate-400 bg-slate-50 p-3 rounded text-left font-mono">
             This app requires WebAssembly (WASM) support. Please use a modern browser
@@ -64,12 +64,9 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col font-sans text-slate-700 bg-slate-50">
-
       <Header dbReady={dbState === 'ready'} />
 
       <main className="flex-1 overflow-auto scroll-thin">
-
-        {/* DuckDB initialising */}
         {dbState === 'loading' && (
           <div className="flex flex-col items-center justify-center h-full gap-4">
             <div className="flex gap-2">
@@ -82,36 +79,27 @@ export default function App() {
               ))}
             </div>
             <div className="text-center">
-              <div className="font-semibold text-slate-700 text-sm">Initialising DuckDB engine…</div>
+              <div className="font-semibold text-slate-700 text-sm">Initialising Database engine…</div>
               <div className="text-xs text-slate-400 mt-1">Loading WASM modules…</div>
             </div>
           </div>
         )}
 
-        {/* App screens */}
         {dbState === 'ready' && (
           <>
-            {currentScreen === 'dashboard'     && <SessionsDashboard />}
-            {currentScreen === 'upload'        && <UploadZone />}
+            {currentScreen === 'projects' && <ProjectsDashboard />}
+            {currentScreen === 'audit-init' && <AuditInitWizard />}
+            {currentScreen === 'upload' && <UploadZone />}
             {currentScreen === 'schema-mapper' && <SchemaMapper />}
-            {currentScreen === 'profiler'      && <DataProfiler />}
-            {currentScreen === 'analysis'      && <AuditDashboard />}
-            {currentScreen === 'explorer'      && <IssueExplorer />}
-            {currentScreen === 'insights'      && <AIInsightsPanel />}
-            {currentScreen === 'settings'      && <SettingsScreen />}
+            {currentScreen === 'profiler' && <DataProfiler />}
+            {currentScreen === 'pre-checks' && <PreChecksView />}
+            {currentScreen === 'analysis' && <AuditDashboard />}
+            {currentScreen === 'comparison' && <ComparisonView />}
+            {currentScreen === 'explorer' && <IssueExplorer />}
+            {currentScreen === 'settings' && <SettingsScreen />}
           </>
         )}
       </main>
-    </div>
-  );
-}
-
-function PhasePlaceholder({ label, phase }: { label: string; phase: number }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
-      <div className="text-4xl font-bold font-mono text-slate-200">P{phase}</div>
-      <div className="font-semibold text-slate-500">{label}</div>
-      <div className="text-sm">Coming in Phase {phase}</div>
     </div>
   );
 }

@@ -3,29 +3,25 @@ import {
   REQUIRED_COLUMNS,
   REQUIRED_EITHER_TIMESTAMPS,
   REQUIRED_EITHER_TEXT,
+  RECOMMENDED_FOR_CATALOG,
+  COLUMN_LABELS,
 } from '../constants';
 
 export function validateStructure(
   file: ParsedFile,
   columnMap: ColumnMap
 ): ValidationReport {
-  const errors:   ValidationIssue[] = [];
+  const errors: ValidationIssue[] = [];
   const warnings: ValidationIssue[] = [];
-  const infos:    ValidationIssue[] = [];
-  const passed:   string[] = [];
+  const infos: ValidationIssue[] = [];
+  const passed: string[] = [];
 
-  // ── Non-empty file ───────────────────────────────────────────────────────
   if (file.rowCount === 0) {
-    errors.push({
-      level: 'ERROR',
-      code: 'EMPTY_FILE',
-      message: 'The file contains no data rows.',
-    });
+    errors.push({ level: 'ERROR', code: 'EMPTY_FILE', message: 'The file contains no data rows.' });
   } else {
     passed.push(`${file.rowCount.toLocaleString()} rows detected`);
   }
 
-  // ── Minimum column count ─────────────────────────────────────────────────
   if (file.headers.length < 3) {
     warnings.push({
       level: 'WARNING',
@@ -36,63 +32,64 @@ export function validateStructure(
     passed.push(`${file.headers.length} columns detected`);
   }
 
-  // ── Required columns ─────────────────────────────────────────────────────
   for (const col of REQUIRED_COLUMNS) {
     if (!columnMap[col]) {
       errors.push({
         level: 'ERROR',
         code: 'MISSING_REQUIRED_COLUMN',
-        message: `Could not detect a column for "${col}". Please map it manually on the next screen.`,
+        message: `Could not detect a column for "${COLUMN_LABELS[col]}". Please map it manually on the next screen.`,
         column: col,
       });
     } else {
-      passed.push(`"${col}" detected → "${columnMap[col]}"`);
+      passed.push(`"${COLUMN_LABELS[col]}" detected → "${columnMap[col]}"`);
     }
   }
 
-  // ── At least one timestamp ───────────────────────────────────────────────
   const hasTimestamp = REQUIRED_EITHER_TIMESTAMPS.some((col) => !!columnMap[col]);
   if (!hasTimestamp) {
     errors.push({
       level: 'ERROR',
       code: 'NO_TIMESTAMP',
-      message:
-        'No date or timestamp column was detected. At least one is required for time-based analysis.',
+      message: 'No date column was detected. A "Date" column is required for time-based analysis.',
     });
   } else {
-    const found = REQUIRED_EITHER_TIMESTAMPS.filter((c) => !!columnMap[c]);
-    passed.push(`${found.length} timestamp column(s) detected`);
+    passed.push('Date column detected');
   }
 
-  // ── At least one text field ──────────────────────────────────────────────
   const hasText = REQUIRED_EITHER_TEXT.some((col) => !!columnMap[col]);
   if (!hasText) {
     warnings.push({
       level: 'WARNING',
       code: 'NO_TEXT',
-      message:
-        'No text description column was detected. AI analysis modules will have limited context.',
+      message: 'No description or confirmation column was detected. AI analysis will have limited context.',
     });
   } else {
-    passed.push('Text description column(s) detected');
+    passed.push('Description / confirmation column(s) detected');
   }
 
-  // ── No reliability codes ─────────────────────────────────────────────────
-  const hasReliabilityCodes = !!(
-    columnMap.reliability_code_1 ||
-    columnMap.reliability_code_2 ||
-    columnMap.reliability_code_3
-  );
-  if (!hasReliabilityCodes) {
+  const missingCatalogCols = RECOMMENDED_FOR_CATALOG.filter((c) => !columnMap[c]);
+  if (missingCatalogCols.length === RECOMMENDED_FOR_CATALOG.length) {
+    warnings.push({
+      level: 'WARNING',
+      code: 'NO_CATALOG_COLUMNS',
+      message: 'No failure-catalog code descriptions detected. Catalog hierarchy validation will be skipped.',
+    });
+  } else if (missingCatalogCols.length > 0) {
     infos.push({
       level: 'INFO',
-      code: 'NO_RELIABILITY_CODES',
-      message:
-        'No reliability code columns detected. Code-vs-description mismatch analysis will be skipped.',
+      code: 'PARTIAL_CATALOG_COLUMNS',
+      message: `${missingCatalogCols.length} catalog code description(s) not mapped: ${missingCatalogCols.map((c) => COLUMN_LABELS[c]).join(', ')}.`,
     });
   }
 
-  // ── Info: file summary ───────────────────────────────────────────────────
+  if (!columnMap.code_group) {
+    infos.push({
+      level: 'INFO',
+      code: 'NO_CODE_GROUP',
+      message: 'No "Code Group" (scoping template) column detected. The "missing scoping text" rule check will be skipped.',
+    });
+  }
+
   infos.push({
     level: 'INFO',
     code: 'FILE_SUMMARY',
@@ -100,7 +97,7 @@ export function validateStructure(
   });
 
   const canProceed = errors.length === 0;
-  const dataQualityScore = computeStructuralScore(errors.length, warnings.length, file, columnMap);
+  const dataQualityScore = computeStructuralScore(errors.length, warnings.length, columnMap);
 
   return { errors, warnings, infos, passed, dataQualityScore, canProceed };
 }
@@ -108,18 +105,17 @@ export function validateStructure(
 function computeStructuralScore(
   errorCount: number,
   warningCount: number,
-  file: ParsedFile,
   columnMap: ColumnMap
 ): number {
   let score = 100;
   score -= errorCount * 20;
   score -= warningCount * 5;
 
-  // Bonus: has confirmation text (most valuable text field for audit)
-  if (!columnMap.confirmation_text) score -= 5;
-
-  // Bonus: has equipment or FL (enables equipment-level analysis)
+  if (!columnMap.confirmation_text && !columnMap.confirmation_long_text) score -= 5;
   if (!columnMap.equipment && !columnMap.functional_location) score -= 5;
+
+  const catalogMapped = RECOMMENDED_FOR_CATALOG.filter((c) => !!columnMap[c]).length;
+  if (catalogMapped < 2) score -= 5;
 
   return Math.max(0, Math.min(100, Math.round(score)));
 }

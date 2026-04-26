@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Icon from './Icon';
 import { ModelSelector } from './ModelSelector';
 import { useStore } from '../store/useStore';
 import { testApiConnection, fetchModels } from '../services/AIService';
 import type { TieredModels } from '../services/AIService';
+import {
+  parseCatalogXlsx, setUserCatalog, resetToBundled, getActiveCatalog,
+} from '../services/FailureCatalogService';
 import { AI_PROVIDERS } from '../constants';
+import type { FailureCatalog } from '../types';
 
 type ProviderKey = keyof typeof AI_PROVIDERS;
 
@@ -272,13 +276,134 @@ export default function SettingsScreen() {
         </form>
       </div>
 
+      <FailureCatalogSection />
+
       {/* Privacy note */}
       <div className="mt-6 max-w-xl bg-slate-50 border border-slate-200 rounded p-4 text-xs text-slate-500 leading-relaxed">
         <span className="font-bold text-slate-700">Privacy note:</span>{' '}
-        All SQL analysis runs locally in your browser via DuckDB WASM.
-        AI only receives aggregated summaries (counts, rates, anomaly descriptions) — never raw rows or individual records.
-        If no API key is configured, all DuckDB analysis still works fully in demo mode.
+        All SQL analysis runs locally in your browser.
+        AI only receives aggregated summaries (counts, rates, flagged-record snapshots) — never raw exports.
+        If no API key is configured, the rule-based pre-checks still run fully offline.
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Failure Catalog section
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FailureCatalogSection() {
+  const [catalog, setCatalog] = useState<FailureCatalog>(() => getActiveCatalog());
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err' | null; text: string }>({ kind: null, text: '' });
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    setMsg({ kind: null, text: '' });
+    try {
+      const next = await parseCatalogXlsx(file);
+      await setUserCatalog(next);
+      setCatalog(next);
+      setMsg({ kind: 'ok', text: `Loaded ${next.rowCount.toLocaleString()} catalog rows.` });
+    } catch (err) {
+      setMsg({ kind: 'err', text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+      e.target.value = '';
+    }
+  };
+
+  const onReset = async () => {
+    setBusy(true);
+    setMsg({ kind: null, text: '' });
+    try {
+      const next = await resetToBundled();
+      setCatalog(next);
+      setMsg({ kind: 'ok', text: 'Reverted to the bundled default catalog.' });
+    } catch (err) {
+      setMsg({ kind: 'err', text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="bg-white p-6 rounded border max-w-xl mt-6">
+      <div className="border-b pb-4 mb-5 flex items-center gap-3">
+        <div className="bg-violet-600 p-2 rounded text-white flex items-center justify-center">
+          <Icon name="layers" className="w-5 h-5" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold mb-1">Failure Catalog</h2>
+          <p className="text-xs text-slate-400">
+            Used by the catalog hierarchy validator and the AI "False Not Listed" detector.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <Stat label="Source" value={catalog.source === 'user' ? 'Custom upload' : 'Bundled default'} />
+        <Stat label="Rows" value={catalog.rowCount.toLocaleString()} />
+        <Stat label="Updated" value={new Date(catalog.generatedAt).toLocaleDateString()} />
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        onChange={onFile}
+        className="hidden"
+      />
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className="px-4 py-2 text-sm bg-slate-900 text-white rounded font-bold flex items-center gap-2 hover:bg-slate-800 transition disabled:opacity-50"
+        >
+          <Icon name="upload" className="w-4 h-4" />
+          Upload new catalog (.xlsx)
+        </button>
+        {catalog.source === 'user' && (
+          <button
+            onClick={onReset}
+            disabled={busy}
+            className="px-4 py-2 text-sm border border-slate-200 rounded font-bold flex items-center gap-2 hover:bg-slate-50 transition disabled:opacity-50"
+          >
+            <Icon name="refresh" className="w-4 h-4" />
+            Reset to bundled default
+          </button>
+        )}
+      </div>
+      {msg.kind && (
+        <div
+          className={`mt-3 p-2 text-xs rounded border ${
+            msg.kind === 'ok'
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          {msg.text}
+        </div>
+      )}
+      <p className="mt-3 text-xs text-slate-400 leading-relaxed">
+        Upload an Excel file with columns: <code className="font-mono">Failure_Catalog_Desc</code>,{' '}
+        <code className="font-mono">Object_Part_Code_Description</code>,{' '}
+        <code className="font-mono">Damage_Code_Description</code>,{' '}
+        <code className="font-mono">Cause_Code_Description</code>. Stored locally in your browser.
+      </p>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-slate-50 border border-slate-100 rounded px-3 py-2">
+      <div className="text-[10px] font-bold uppercase text-slate-400">{label}</div>
+      <div className="text-sm font-semibold text-slate-700 truncate">{value}</div>
     </div>
   );
 }
