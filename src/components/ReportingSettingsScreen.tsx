@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore, useActiveRun } from '../store/useStore';
+import { useRunAutoRestore } from '../hooks/useRunAutoRestore';
 import { query } from '../services/DuckDBService';
 import Icon from './Icon';
 
@@ -11,6 +12,7 @@ interface WCInfo {
 export default function ReportingSettingsScreen() {
   const { reportingEmails, setReportingEmail, currentScreen } = useStore();
   const run = useActiveRun();
+  useRunAutoRestore(run);
   const [workCenters, setWorkCenters] = useState<WCInfo[]>([]);
   const [loading, setLoading] = useState(true);
 

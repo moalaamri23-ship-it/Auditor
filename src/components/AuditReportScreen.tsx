@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Icon from './Icon';
 import FilterPanel from './FilterPanel';
 import { useActiveRun, useActiveProject, useStore } from '../store/useStore';
+import { useRunAutoRestore } from '../hooks/useRunAutoRestore';
 import {
   query,
   getFilterOptions,
@@ -24,13 +25,13 @@ interface WorkCenterAuditData {
 async function loadWorkCenters(
   columnMap: ColumnMap,
   filters: AnalysisFilters,
-  aiFlags: any[],
-  ruleChecks: any,
+  _aiFlags: any[],
+  _ruleChecks: any,
 ): Promise<WorkCenterAuditData[]> {
   const hasWC = !!columnMap.work_center;
+  console.log('[AuditReport] loadWorkCenters called, hasWC:', hasWC, 'columnMap:', columnMap);
   if (!hasWC) return [];
 
-  const wcCol = 'work_center';
   const descCol = columnMap.work_center_description ? 'work_center_description' : null;
 
   const conditions: string[] = [`TRIM(CAST(work_center AS VARCHAR)) <> ''`];
@@ -49,33 +50,30 @@ async function loadWorkCenters(
   }
 
   const where = `WHERE ${conditions.join(' AND ')}`;
-
   const descExpr = descCol ? `MAX(${descCol})` : `''`;
 
-  const rows = await query(`
+  const sql = `
     SELECT
-      ${wcCol} AS work_center,
+      work_center,
       ${descExpr} AS description,
-      COUNT(work_order_number) AS total_wos,
-      list(work_order_number) AS wos
+      COUNT(work_order_number) AS total_wos
     FROM v_wo_primary
     ${where}
-    GROUP BY ${wcCol}
-    ORDER BY ${wcCol}
-  `);
+    GROUP BY work_center
+    ORDER BY work_center
+  `;
 
-  return rows.map(r => {
-    const wos = new Set((r.wos as any[]).map(String));
-    const aiCount = aiFlags?.filter(f => wos.has(String(f.woNumber))).length || 0;
-    const ruleCount = ruleChecks?.flaggedWOs?.filter((f: any) => wos.has(String(f.wo))).length || 0;
-    return {
-      workCenter: String(r.work_center ?? ''),
-      description: String(r.description ?? ''),
-      totalWOs: Number(r.total_wos ?? 0),
-      aiFlagsCount: aiCount,
-      ruleFlagsCount: ruleCount,
-    };
-  });
+  console.log('[AuditReport] Running SQL:', sql);
+  const rows = await query(sql);
+  console.log('[AuditReport] Got rows:', rows.length, rows.slice(0, 3));
+
+  return rows.map(r => ({
+    workCenter: String(r.work_center ?? ''),
+    description: String(r.description ?? ''),
+    totalWOs: Number(r.total_wos ?? 0),
+    aiFlagsCount: 0,
+    ruleFlagsCount: 0,
+  }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,6 +82,8 @@ export default function AuditReportScreen() {
   const run = useActiveRun();
   const project = useActiveProject();
   const { reportingEmails, aiConfig, setScreen } = useStore();
+
+  useRunAutoRestore(run);
 
   const [filters, setFilters] = useState<AnalysisFilters>(EMPTY_FILTERS);
   const [baseFilterOptions, setBaseFilterOptions] = useState<FilterOptions | null>(null);
@@ -132,7 +132,7 @@ export default function AuditReportScreen() {
     }, 200);
 
     return () => clearTimeout(t);
-  }, [filters, run?.id, run?.columnMap, run?.aiFlags, run?.ruleChecks]);
+  }, [filters, run?.id, run?.hasDataInDB, run?.columnMap, run?.aiFlags, run?.ruleChecks]);
 
   // ── Effect 3: cascade filter options when baseFilterOptions is ready ─────────
   useEffect(() => {
