@@ -85,7 +85,7 @@ export default function AuditReportScreen() {
   const project = useActiveProject();
   const { reportingEmails, aiConfig, setScreen } = useStore();
 
-  const [filters, setFilters] = useState<AnalysisFilters>(run?.analysisFilters ?? EMPTY_FILTERS);
+  const [filters, setFilters] = useState<AnalysisFilters>(EMPTY_FILTERS);
   const [baseFilterOptions, setBaseFilterOptions] = useState<FilterOptions | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
 
