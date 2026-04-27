@@ -61,22 +61,48 @@ export default function AuditReportScreen() {
         setLiveScopeCount(count);
         setFilterOptions(cascaded);
 
+        // Also keep v_analysis_scope up to date for other consumers
         await createAnalysisScopeView(filters, run.columnMap, project);
 
         const hasWC = !!run.columnMap.work_center;
         const wcCol = hasWC ? 'work_center' : "''";
         const descCol = run.columnMap.work_center_description ? 'work_center_description' : "''";
 
-        // Fetch Work Centers in scope
+        // Build a filter WHERE clause matching the active filters
+        const conditions: string[] = [];
+        if (hasWC) conditions.push(`TRIM(CAST(work_center AS VARCHAR)) <> ''`);
+        if (filters.dateFrom && run.columnMap.notification_date)
+          conditions.push(`notification_date >= '${filters.dateFrom}'::DATE`);
+        if (filters.dateTo && run.columnMap.notification_date)
+          conditions.push(`notification_date <= '${filters.dateTo}'::DATE`);
+        if (filters.workCenter.length > 0 && hasWC)
+          conditions.push(`work_center IN (${filters.workCenter.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`);
+        if (filters.functionalLocation.length > 0 && run.columnMap.functional_location)
+          conditions.push(`functional_location IN (${filters.functionalLocation.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`);
+        if (filters.equipment.length > 0) {
+          const eq = run.columnMap.equipment_description ? 'equipment_description' : run.columnMap.equipment ? 'equipment' : null;
+          if (eq) conditions.push(`${eq} IN (${filters.equipment.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`);
+        }
+
+        if (!hasWC) {
+          setWcData([]);
+          setLoadingData(false);
+          return;
+        }
+
+        const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        // Fetch Work Centers directly from v_wo_primary
         const rows = await query(`
           SELECT 
             ${wcCol} as work_center, 
             MAX(${descCol}) as description, 
             COUNT(work_order_number) as total_wos,
             list(work_order_number) as wos
-          FROM v_analysis_scope
-          WHERE ${hasWC ? "TRIM(CAST(work_center AS VARCHAR)) <> ''" : "1=0"}
+          FROM v_wo_primary
+          ${where}
           GROUP BY ${wcCol}
+          ORDER BY ${wcCol}
         `);
 
         const data: WorkCenterAuditData[] = rows.map(r => {
@@ -92,16 +118,12 @@ export default function AuditReportScreen() {
           };
         });
 
-        // Sort alphabetically
         data.sort((a, b) => a.workCenter.localeCompare(b.workCenter));
         setWcData(data);
 
-        // Clear selection if not in new data
         setSelectedWCs(prev => {
           const next = new Set<string>();
-          data.forEach(d => {
-            if (prev.has(d.workCenter)) next.add(d.workCenter);
-          });
+          data.forEach(d => { if (prev.has(d.workCenter)) next.add(d.workCenter); });
           return next;
         });
 
