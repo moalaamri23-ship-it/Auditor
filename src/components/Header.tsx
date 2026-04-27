@@ -18,6 +18,7 @@ const PROJECT_TABS: Tab[] = [
 
 const GLOBAL_TABS: Tab[] = [
   { id: 'projects', label: 'Projects' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 const VISIBLE_STAGES: ReadonlySet<RunStage> = new Set<RunStage>([
@@ -120,31 +121,22 @@ export default function Header({ dbReady }: { dbReady: boolean }) {
         <div className="flex items-center gap-2 relative">
           <div
             className={`flex items-center gap-2 overflow-hidden transition-all duration-300 ease-in-out ${
-              toolbarOpen ? 'max-w-lg opacity-100' : 'max-w-0 opacity-0 pointer-events-none'
+              toolbarOpen ? 'max-w-xs opacity-100' : 'max-w-0 opacity-0 pointer-events-none'
             }`}
           >
             <div className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded border bg-slate-800 border-slate-600 text-slate-300 whitespace-nowrap">
               <div className={`w-1.5 h-1.5 rounded-full ${dbReady ? 'bg-green-400' : 'bg-amber-400 animate-pulse'}`} />
               {dbReady ? 'Database ready' : 'Loading…'}
             </div>
-            <button
-              onClick={() => { setScreen('settings'); setToolbarOpen(false); }}
-              className="text-xs font-bold px-3 py-1.5 rounded border flex items-center gap-1.5 whitespace-nowrap bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 transition"
-            >
-              Settings
-            </button>
-            <button
-              className="text-xs font-bold px-3 py-1.5 rounded border flex items-center gap-1.5 whitespace-nowrap bg-slate-800 border-slate-600 text-slate-400 cursor-not-allowed opacity-60"
-              disabled
-            >
-              Reporting Settings
-            </button>
-            <button
-              className="text-xs font-bold px-3 py-1.5 rounded border flex items-center gap-1.5 whitespace-nowrap bg-slate-800 border-slate-600 text-slate-400 cursor-not-allowed opacity-60"
-              disabled
-            >
-              DATA View
-            </button>
+            {project && (
+              <button
+                onClick={goToProjects}
+                className="text-xs font-bold px-3 py-1.5 rounded border flex items-center gap-1.5 whitespace-nowrap bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 transition"
+              >
+                <Icon name="arrowLeft" className="w-3.5 h-3.5" />
+                Projects
+              </button>
+            )}
           </div>
 
           <button

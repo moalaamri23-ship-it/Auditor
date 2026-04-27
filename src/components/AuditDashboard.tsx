@@ -713,21 +713,20 @@ export default function AuditDashboard() {
 
       <SummaryRow ruleChecks={run.ruleChecks} aiFlagSummary={run.aiFlagSummary} />
 
-      <ChartCard
-        title="Error Distribution"
-        subtitle="Counts per category — both rule-based and AI-detected"
-        hint={visualSelection?.type === 'flagCategory' ? `Filtered: ${visualSelection.value}` : undefined}
-      >
-        <ErrorDistribution
-          ruleChecks={run.ruleChecks}
-          ai={run.aiFlagSummary}
-          filteredErrorDist={filteredErrorDist}
-          visualSelection={visualSelection}
-          onSelect={(key) => handleVisualClick('flagCategory', key)}
-        />
-      </ChartCard>
-
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-3 gap-6">
+        <ChartCard
+          title="Error Distribution"
+          subtitle="Counts per category — both rule-based and AI-detected"
+          hint={visualSelection?.type === 'flagCategory' ? `Filtered: ${visualSelection.value}` : undefined}
+        >
+          <ErrorDistribution
+            ruleChecks={run.ruleChecks}
+            ai={run.aiFlagSummary}
+            filteredErrorDist={filteredErrorDist}
+            visualSelection={visualSelection}
+            onSelect={(key) => handleVisualClick('flagCategory', key)}
+          />
+        </ChartCard>
         <ChartCard
           title="Code Quality Breakdown"
           subtitle="State of the Object/Damage/Cause description fields"
@@ -951,7 +950,7 @@ function ErrorDistribution({
         }}
       >
         <XAxis type="number" tick={{ fontSize: 10 }} />
-        <YAxis dataKey="label" type="category" tick={{ fontSize: 11 }} width={240} />
+        <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={200} />
         <Tooltip />
         <Bar dataKey="value">
           {data.map((d, i) => (

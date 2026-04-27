@@ -355,14 +355,14 @@ async function _buildColumnProfiles(columnMap: ColumnMap): Promise<ColumnProfile
       const [countRow] = await _q(`
         SELECT
           COUNT(*) AS total,
-          COUNT(CASE WHEN "${colName}" IS NOT NULL AND TRIM(CAST("${colName}" AS VARCHAR)) <> '' THEN 1 END) AS non_empty,
+          COUNT("${colName}") AS non_null,
           COUNT(DISTINCT "${colName}") AS distinct_count
         FROM audit
       `);
       const total = Number((countRow as any)?.total ?? 0);
-      const nonEmpty = Number((countRow as any)?.non_empty ?? 0);
+      const nonNull = Number((countRow as any)?.non_null ?? 0);
       const distinctCnt = Number((countRow as any)?.distinct_count ?? 0);
-      const nullCount = total - nonEmpty;
+      const nullCount = total - nonNull;
       const nullPct = total > 0 ? Math.round((nullCount / total) * 100) : 0;
 
       const sampleRows = await _q(`

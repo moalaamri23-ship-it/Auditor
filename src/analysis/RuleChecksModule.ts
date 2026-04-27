@@ -118,6 +118,76 @@ export async function runRuleChecks(opts: RuleCheckOptions): Promise<RuleCheckRe
     );
   }
 
+  // 4. Catalog hierarchy validity (4 sub-checks)
+  if (catalogAvailable && has('failure_catalog_desc')) {
+    if (has('object_part_code_description')) {
+      await runCheck(
+        'catalog_invalid_object_part',
+        woCol,
+        `failure_catalog_desc IS NOT NULL AND TRIM(failure_catalog_desc) <> ''
+          AND object_part_code_description IS NOT NULL AND TRIM(object_part_code_description) <> ''
+          AND UPPER(TRIM(object_part_code_description)) NOT LIKE 'NOT LISTED%'
+          AND NOT EXISTS (
+            SELECT 1 FROM v_catalog_object_parts c
+            WHERE c.failure_catalog_desc = v_analysis_scope.failure_catalog_desc
+              AND c.object_part_code_description = v_analysis_scope.object_part_code_description
+          )`,
+      );
+    }
+    if (has('object_part_code_description') && has('damage_code_description')) {
+      await runCheck(
+        'catalog_invalid_damage_for_part',
+        woCol,
+        `failure_catalog_desc IS NOT NULL AND TRIM(failure_catalog_desc) <> ''
+          AND object_part_code_description IS NOT NULL AND TRIM(object_part_code_description) <> ''
+          AND damage_code_description IS NOT NULL AND TRIM(damage_code_description) <> ''
+          AND UPPER(TRIM(damage_code_description)) NOT LIKE 'NOT LISTED%'
+          AND NOT EXISTS (
+            SELECT 1 FROM v_catalog_damage_for_part c
+            WHERE c.failure_catalog_desc = v_analysis_scope.failure_catalog_desc
+              AND c.object_part_code_description = v_analysis_scope.object_part_code_description
+              AND c.damage_code_description = v_analysis_scope.damage_code_description
+          )`,
+      );
+    }
+    if (
+      has('object_part_code_description') &&
+      has('damage_code_description') &&
+      has('cause_code_description')
+    ) {
+      await runCheck(
+        'catalog_invalid_cause_for_damage',
+        woCol,
+        `failure_catalog_desc IS NOT NULL AND TRIM(failure_catalog_desc) <> ''
+          AND object_part_code_description IS NOT NULL AND TRIM(object_part_code_description) <> ''
+          AND damage_code_description IS NOT NULL AND TRIM(damage_code_description) <> ''
+          AND cause_code_description IS NOT NULL AND TRIM(cause_code_description) <> ''
+          AND UPPER(TRIM(cause_code_description)) NOT LIKE 'NOT LISTED%'
+          AND NOT EXISTS (
+            SELECT 1 FROM v_catalog_cause_for_damage c
+            WHERE c.failure_catalog_desc = v_analysis_scope.failure_catalog_desc
+              AND c.object_part_code_description = v_analysis_scope.object_part_code_description
+              AND c.damage_code_description = v_analysis_scope.damage_code_description
+              AND c.cause_code_description = v_analysis_scope.cause_code_description
+          )`,
+      );
+    }
+
+    // Missing match — any of the 4 fields blank or null
+    const blankExpr = (col: string) =>
+      has(col as keyof ColumnMap)
+        ? `(${col} IS NULL OR TRIM(${col}) = '')`
+        : `TRUE`;
+    const missingConds: string[] = [];
+    if (has('failure_catalog_desc')) missingConds.push(blankExpr('failure_catalog_desc'));
+    if (has('object_part_code_description')) missingConds.push(blankExpr('object_part_code_description'));
+    if (has('damage_code_description')) missingConds.push(blankExpr('damage_code_description'));
+    if (has('cause_code_description')) missingConds.push(blankExpr('cause_code_description'));
+    if (missingConds.length > 0) {
+      await runCheck('catalog_missing_match', woCol, missingConds.join(' OR '));
+    }
+  }
+
   const flaggedWOs = Array.from(flaggedMap.entries()).map(([wo, set]) => ({
     wo,
     checks: Array.from(set),
@@ -146,5 +216,25 @@ export const RULE_CHECK_LABELS: Record<RuleCheckId, { label: string; severity: '
     label: 'Missing Scoping Text',
     severity: 'MEDIUM',
     description: 'Description was written ad-hoc (no Code Group / scoping template selected).',
+  },
+  catalog_invalid_object_part: {
+    label: 'Invalid Object Part',
+    severity: 'HIGH',
+    description: 'Object part is not listed under this Failure Catalog branch.',
+  },
+  catalog_invalid_damage_for_part: {
+    label: 'Invalid Damage for Part',
+    severity: 'HIGH',
+    description: 'Damage code is valid in catalog but not under this object part.',
+  },
+  catalog_invalid_cause_for_damage: {
+    label: 'Invalid Cause for Damage',
+    severity: 'HIGH',
+    description: 'Cause code is valid in catalog but not under this damage code.',
+  },
+  catalog_missing_match: {
+    label: 'Missing Catalog Fields',
+    severity: 'MEDIUM',
+    description: 'One or more catalog fields (Failure Catalog / Part / Damage / Cause) is blank.',
   },
 };

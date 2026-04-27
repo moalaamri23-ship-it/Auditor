@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Icon from './Icon';
 import FilterPanel from './FilterPanel';
-import { TIMESTAMP_COLUMNS } from '../constants';
 import { useActiveRun, useActiveProject, useStore } from '../store/useStore';
 import {
   query, getFilterOptions, getLiveScopeCount, getCascadingFilterOptions,
@@ -357,26 +356,15 @@ function DataTab({
             <tbody className="divide-y divide-slate-100">
               {rows.map((row, i) => (
                 <tr key={i} className="hover:bg-slate-50">
-                  {columns.map((col) => {
-                    const raw = row[col];
-                    const isDate = (TIMESTAMP_COLUMNS as string[]).includes(col);
-                    let display = String(raw ?? '');
-                    if (isDate && display) {
-                      const d = new Date(display);
-                      if (!isNaN(d.getTime())) {
-                        display = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
-                      }
-                    }
-                    return (
-                      <td
-                        key={col}
-                        className="px-3 py-1.5 text-slate-700 border-r border-slate-100 font-mono max-w-[200px] truncate"
-                        title={display}
-                      >
-                        {display}
-                      </td>
-                    );
-                  })}
+                  {columns.map((col) => (
+                    <td
+                      key={col}
+                      className="px-3 py-1.5 text-slate-700 border-r border-slate-100 font-mono max-w-[200px] truncate"
+                      title={String(row[col] ?? '')}
+                    >
+                      {String(row[col] ?? '')}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
