@@ -13,6 +13,20 @@ import type {
   AnalysisFilters, FilterOptions,
 } from '../types';
 import { EMPTY_FILTERS } from '../types';
+import { TIMESTAMP_COLUMNS } from '../constants';
+import { useRunAutoRestore } from '../hooks/useRunAutoRestore';
+
+function fmtCell(col: string, value: unknown): string {
+  const raw = String(value ?? '');
+  if (!raw) return '';
+  if ((TIMESTAMP_COLUMNS as readonly string[]).includes(col)) {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+    }
+  }
+  return raw;
+}
 
 type Tab = 'data' | 'rule-flags' | 'ai-flags';
 
@@ -102,6 +116,7 @@ export default function IssueExplorer() {
   const run = useActiveRun();
   const project = useActiveProject();
   const { setScreen } = useStore();
+  useRunAutoRestore(run ?? null);
 
   const [tab, setTab] = useState<Tab>('data');
   const [tableData, setTableData] = useState<FullTableData>({ columns: [], rows: [] });
@@ -316,7 +331,7 @@ function DataTab({
   if (!hasDB) {
     return (
       <div className="bg-white border border-slate-200 rounded shadow-sm p-12 text-center text-slate-400 text-sm">
-        Data not loaded — re-upload the file to view the WO table.
+        Loading data…
       </div>
     );
   }
@@ -360,9 +375,9 @@ function DataTab({
                     <td
                       key={col}
                       className="px-3 py-1.5 text-slate-700 border-r border-slate-100 font-mono max-w-[200px] truncate"
-                      title={String(row[col] ?? '')}
+                      title={fmtCell(col, row[col])}
                     >
-                      {String(row[col] ?? '')}
+                      {fmtCell(col, row[col])}
                     </td>
                   ))}
                 </tr>

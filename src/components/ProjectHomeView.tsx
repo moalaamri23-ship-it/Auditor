@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Icon from './Icon';
 import { useStore, useActiveProject, useRunsForProject } from '../store/useStore';
 import type { AuditRun, RunStage } from '../types';
+import { loadRunData } from '../services/IndexedDBService';
 
 function stageScreen(stage: RunStage): import('../types').Screen {
   if (stage === 'analysed') return 'analysis';
@@ -38,6 +39,36 @@ export default function ProjectHomeView() {
   const runs = useRunsForProject(project?.id ?? null);
   const { setScreen, setActiveRun, deleteRun, updateRun } = useStore();
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; label: string } | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    if (!project) return;
+    setExporting(true);
+    try {
+      const exportRuns = await Promise.all(
+        runs.map(async (run) => {
+          const rawData = await loadRunData(run.id).catch(() => null);
+          return { ...run, rawData: rawData ? { rows: rawData.rows, columnMap: rawData.columnMap } : null };
+        }),
+      );
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        appVersion: 'sap-auditor-v2',
+        project,
+        runs: exportRuns,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `${project.name.replace(/[^a-z0-9]/gi, '_')}-export-${date}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (!project) {
     return (
@@ -89,13 +120,23 @@ export default function ProjectHomeView() {
             )}
           </div>
         </div>
-        <button
-          onClick={() => { setActiveRun(null); setScreen('upload'); }}
-          className="px-4 py-2 text-sm font-bold bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition flex items-center gap-2"
-        >
-          <Icon name="plus" className="w-4 h-4" />
-          New Run
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            disabled={exporting || runs.length === 0}
+            className="px-4 py-2 text-sm font-bold border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Icon name="download" className="w-4 h-4" />
+            {exporting ? 'Exporting…' : 'Export Project'}
+          </button>
+          <button
+            onClick={() => { setActiveRun(null); setScreen('upload'); }}
+            className="px-4 py-2 text-sm font-bold bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition flex items-center gap-2"
+          >
+            <Icon name="plus" className="w-4 h-4" />
+            New Run
+          </button>
+        </div>
       </div>
 
       {/* Run list */}

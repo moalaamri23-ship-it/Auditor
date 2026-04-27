@@ -215,11 +215,7 @@ export interface FailureCatalog {
 export type RuleCheckId =
   | 'missing_confirmation'
   | 'not_listed_codes'
-  | 'missing_scoping_text'
-  | 'catalog_invalid_object_part'
-  | 'catalog_invalid_damage_for_part'
-  | 'catalog_invalid_cause_for_damage'
-  | 'catalog_missing_match';
+  | 'missing_scoping_text';
 
 export interface RuleCheckBucket {
   matched: number;

@@ -184,27 +184,6 @@ export async function loadFailureCatalog(rows: FailureCatalogEntry[]): Promise<v
       AND cause_code_description IS NOT NULL
   `);
 
-  await _conn.query('DROP VIEW IF EXISTS v_catalog_object_parts');
-  await _conn.query(`
-    CREATE VIEW v_catalog_object_parts AS
-    SELECT DISTINCT failure_catalog_desc, object_part_code_description
-    FROM failure_catalog
-  `);
-
-  await _conn.query('DROP VIEW IF EXISTS v_catalog_damage_for_part');
-  await _conn.query(`
-    CREATE VIEW v_catalog_damage_for_part AS
-    SELECT DISTINCT failure_catalog_desc, object_part_code_description, damage_code_description
-    FROM failure_catalog
-  `);
-
-  await _conn.query('DROP VIEW IF EXISTS v_catalog_cause_for_damage');
-  await _conn.query(`
-    CREATE VIEW v_catalog_cause_for_damage AS
-    SELECT DISTINCT failure_catalog_desc, object_part_code_description,
-                    damage_code_description, cause_code_description
-    FROM failure_catalog
-  `);
 }
 
 export async function failureCatalogStats(): Promise<{
@@ -355,7 +334,9 @@ async function _buildColumnProfiles(columnMap: ColumnMap): Promise<ColumnProfile
       const [countRow] = await _q(`
         SELECT
           COUNT(*) AS total,
-          COUNT("${colName}") AS non_null,
+          COUNT(CASE WHEN "${colName}" IS NOT NULL
+                     AND TRIM(CAST("${colName}" AS VARCHAR)) <> ''
+                THEN 1 END) AS non_null,
           COUNT(DISTINCT "${colName}") AS distinct_count
         FROM audit
       `);

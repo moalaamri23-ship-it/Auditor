@@ -4,6 +4,7 @@ import { useStore, useActiveRun, useRunsForProject } from '../store/useStore';
 import { ParsedDataCache } from '../services/ParsedDataCache';
 import { loadData, runProfiling, restoreAIFlagsFromRun, query } from '../services/DuckDBService';
 import { ensureCatalogLoaded } from '../services/FailureCatalogService';
+import { saveRunData } from '../services/IndexedDBService';
 import type { AuditPeriod, CanonicalColumn, ColumnMap, DataProfile, AnalysisFilters } from '../types';
 import { EMPTY_FILTERS } from '../types';
 import {
@@ -110,6 +111,9 @@ export default function SchemaMapper() {
       updateRun(run.id, { columnMap: localMap, stage: 'mapped' });
 
       await loadData(cachedData.rows, localMap);
+
+      // Persist raw data to IndexedDB so cold reloads don't require re-upload
+      saveRunData(run.id, cachedData.rows, localMap).catch(() => {});
 
       // Ensure catalog is loaded for catalog-aware checks downstream
       await ensureCatalogLoaded().catch(() => {});

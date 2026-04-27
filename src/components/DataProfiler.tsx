@@ -9,11 +9,13 @@ import type {
   AnalysisFilters, FilterOptions,
 } from '../types';
 import { EMPTY_FILTERS } from '../types';
+import { useRunAutoRestore } from '../hooks/useRunAutoRestore';
 
 export default function DataProfiler() {
   const run = useActiveRun();
   const project = useActiveProject();
   const { setScreen, updateRun } = useStore();
+  useRunAutoRestore(run ?? null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<AnalysisFilters>(run?.analysisFilters ?? EMPTY_FILTERS);
@@ -373,12 +375,7 @@ function ColumnHealthRow({ col }: { col: ColumnProfile }) {
       </td>
       <td>
         {col.canonicalName ? (
-          <div>
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${CONF_BADGE[col.mappingConfidence]}`}>
-              {col.mappingConfidence}
-            </span>
-            <div className="font-mono text-[10px] text-slate-500 mt-0.5">{col.canonicalName}</div>
-          </div>
+          <div className="font-mono text-[10px] text-slate-500">{col.canonicalName}</div>
         ) : (
           <span className="text-[10px] text-slate-400">Unmapped</span>
         )}

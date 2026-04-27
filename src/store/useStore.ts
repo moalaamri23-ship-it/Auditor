@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import { EMPTY_FILTERS } from '../types';
 import { STORAGE_KEYS } from '../constants';
+import { deleteRunData } from '../services/IndexedDBService';
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
@@ -63,17 +64,16 @@ export const useStore = create<AppState>()(
       },
 
       deleteProject: (id: string) => {
-        set((state) => {
-          const runIds = state.projects.find((p) => p.id === id)?.runIds ?? [];
-          return {
-            projects: state.projects.filter((p) => p.id !== id),
-            runs: state.runs.filter((r) => !runIds.includes(r.id)),
-            activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
-            activeRunId: runIds.includes(state.activeRunId ?? '') ? null : state.activeRunId,
-            currentScreen:
-              state.activeProjectId === id ? 'projects' : state.currentScreen,
-          };
-        });
+        const runIds = get().projects.find((p) => p.id === id)?.runIds ?? [];
+        for (const runId of runIds) deleteRunData(runId);
+        set((state) => ({
+          projects: state.projects.filter((p) => p.id !== id),
+          runs: state.runs.filter((r) => !runIds.includes(r.id)),
+          activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
+          activeRunId: runIds.includes(state.activeRunId ?? '') ? null : state.activeRunId,
+          currentScreen:
+            state.activeProjectId === id ? 'projects' : state.currentScreen,
+        }));
       },
 
       setActiveProject: (id: string | null) => {
@@ -123,6 +123,7 @@ export const useStore = create<AppState>()(
       },
 
       deleteRun: (id: string) => {
+        deleteRunData(id);
         set((state) => {
           const run = state.runs.find((r) => r.id === id);
           return {

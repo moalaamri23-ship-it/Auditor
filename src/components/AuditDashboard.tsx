@@ -15,6 +15,7 @@ import type {
   RuleCheckResult, AIFlagSummary, AIFlag, ChartCache, ColumnMap,
 } from '../types';
 import { EMPTY_FILTERS } from '../types';
+import { useRunAutoRestore } from '../hooks/useRunAutoRestore';
 
 const RULE_COLOR = '#f59e0b';
 const AI_COLOR = '#6366f1';
@@ -235,6 +236,7 @@ export default function AuditDashboard() {
   const project = useActiveProject();
   const projectRuns = useRunsForProject(project?.id ?? null);
   const { setScreen, updateRun, aiConfig } = useStore();
+  useRunAutoRestore(run ?? null);
 
   const [filters, setFilters] = useState<AnalysisFilters>(run?.analysisFilters ?? EMPTY_FILTERS);
   const [baseFilterOptions, setBaseFilterOptions] = useState<FilterOptions | null>(null);
@@ -705,50 +707,48 @@ export default function AuditDashboard() {
         </div>
       )}
 
-      {!run.hasDataInDB && run.chartCache && (
-        <div className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded px-3 py-2">
-          Charts show cached data from the last analysis. Re-upload the file to enable cross-filtering.
-        </div>
-      )}
-
       <SummaryRow ruleChecks={run.ruleChecks} aiFlagSummary={run.aiFlagSummary} />
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <ChartCard
-          title="Error Distribution"
-          subtitle="Counts per category — both rule-based and AI-detected"
-          hint={visualSelection?.type === 'flagCategory' ? `Filtered: ${visualSelection.value}` : undefined}
-        >
-          <ErrorDistribution
-            ruleChecks={run.ruleChecks}
-            ai={run.aiFlagSummary}
-            filteredErrorDist={filteredErrorDist}
-            visualSelection={visualSelection}
-            onSelect={(key) => handleVisualClick('flagCategory', key)}
-          />
-        </ChartCard>
-        <ChartCard
-          title="Code Quality Breakdown"
-          subtitle="State of the Object/Damage/Cause description fields"
-          hint={visualSelection?.type === 'codeQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
-        >
-          <CodeQualityDonut
-            data={codeQuality}
-            visualSelection={visualSelection}
-            onSelect={(name) => handleVisualClick('codeQualitySegment', name)}
-          />
-        </ChartCard>
-        <ChartCard
-          title="Overall Quality"
-          subtitle="WOs by flag status — Valid, text quality, or missing fields"
-          hint={visualSelection?.type === 'overallQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
-        >
-          <OverallQualityRing
-            data={overallQuality}
-            visualSelection={visualSelection}
-            onSelect={(name) => handleVisualClick('overallQualitySegment', name)}
-          />
-        </ChartCard>
+        <div className="lg:col-span-2">
+          <ChartCard
+            title="Error Distribution"
+            subtitle="Counts per category — both rule-based and AI-detected"
+            hint={visualSelection?.type === 'flagCategory' ? `Filtered: ${visualSelection.value}` : undefined}
+          >
+            <ErrorDistribution
+              ruleChecks={run.ruleChecks}
+              ai={run.aiFlagSummary}
+              filteredErrorDist={filteredErrorDist}
+              visualSelection={visualSelection}
+              onSelect={(key) => handleVisualClick('flagCategory', key)}
+            />
+          </ChartCard>
+        </div>
+        <div className="flex flex-col gap-6">
+          <ChartCard
+            title="Code Quality Breakdown"
+            subtitle="State of the Object/Damage/Cause description fields"
+            hint={visualSelection?.type === 'codeQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
+          >
+            <CodeQualityDonut
+              data={codeQuality}
+              visualSelection={visualSelection}
+              onSelect={(name) => handleVisualClick('codeQualitySegment', name)}
+            />
+          </ChartCard>
+          <ChartCard
+            title="Overall Quality"
+            subtitle="WOs by flag status — Valid, text quality, or missing fields"
+            hint={visualSelection?.type === 'overallQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
+          >
+            <OverallQualityRing
+              data={overallQuality}
+              visualSelection={visualSelection}
+              onSelect={(name) => handleVisualClick('overallQualitySegment', name)}
+            />
+          </ChartCard>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -773,7 +773,7 @@ export default function AuditDashboard() {
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="total" name="Total">
+                <Bar dataKey="total" name="Total" fill="#94a3b8">
                   {perWorkCenter.map((d, i) => (
                     <Cell
                       key={i}
@@ -782,7 +782,7 @@ export default function AuditDashboard() {
                     />
                   ))}
                 </Bar>
-                <Bar dataKey="flagged" name="Flagged">
+                <Bar dataKey="flagged" name="Flagged" fill={AI_COLOR}>
                   {perWorkCenter.map((d, i) => (
                     <Cell
                       key={i}
@@ -942,7 +942,7 @@ function ErrorDistribution({
       <BarChart
         data={data}
         layout="vertical"
-        margin={{ left: 24 }}
+        margin={{ left: 0, right: 16, top: 0, bottom: 0 }}
         style={{ cursor: 'pointer' }}
         onClick={(chartData) => {
           const key = chartData?.activePayload?.[0]?.payload?.key;
@@ -950,7 +950,7 @@ function ErrorDistribution({
         }}
       >
         <XAxis type="number" tick={{ fontSize: 10 }} />
-        <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={200} />
+        <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={160} />
         <Tooltip />
         <Bar dataKey="value">
           {data.map((d, i) => (
