@@ -647,31 +647,36 @@ function AIFlagsTab({ flags }: { flags: AIFlag[] }) {
                   </button>
 
                   {isExpanded && (
-                    <div className="border-t border-slate-100 divide-y divide-slate-100 bg-slate-50 animate-enter">
-                      {wFlags.map((f, i) => {
-                        const fSevColor =
-                          f.severity === 'HIGH'
-                            ? 'bg-red-100 text-red-700'
-                            : f.severity === 'MEDIUM'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-yellow-100 text-yellow-700';
-                        return (
-                          <div key={i} className="px-4 py-3">
-                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                              {f.rowSeq != null && (
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                                  Row {f.rowSeq}
+                    <div className="border-t border-slate-100 bg-slate-50 animate-enter">
+                      {/* Shared WO info — shown once */}
+                      <WOSharedInfo flag={wFlags[0]} />
+                      {/* Per-flag rows */}
+                      <div className="divide-y divide-slate-100">
+                        {wFlags.map((f, i) => {
+                          const fSevColor =
+                            f.severity === 'HIGH'
+                              ? 'bg-red-100 text-red-700'
+                              : f.severity === 'MEDIUM'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-yellow-100 text-yellow-700';
+                          return (
+                            <div key={i} className="px-4 py-3">
+                              <div className="flex flex-wrap items-center gap-2 mb-2">
+                                {f.rowSeq != null && (
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                                    Row {f.rowSeq}
+                                  </span>
+                                )}
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${fSevColor}`}>{f.severity}</span>
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                                  {FLAG_CATEGORY_LABELS[f.category]}
                                 </span>
-                              )}
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${fSevColor}`}>{f.severity}</span>
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                                {FLAG_CATEGORY_LABELS[f.category]}
-                              </span>
+                              </div>
+                              <AIFlagRowBody flag={f} />
                             </div>
-                            <AIFlagDetailPanel flag={f} />
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </li>
@@ -689,31 +694,48 @@ function AIFlagsTab({ flags }: { flags: AIFlag[] }) {
   );
 }
 
-function AIFlagDetailPanel({ flag }: { flag: AIFlag }) {
+// Shared WO-level info block — rendered once per WO group
+function WOSharedInfo({ flag }: { flag: AIFlag }) {
   return (
-    <div className="space-y-2 py-1">
+    <div className="px-4 py-3 border-b border-slate-200 bg-white grid sm:grid-cols-3 gap-3 text-xs">
+      {flag.equipment && (
+        <div>
+          <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Equipment</div>
+          <div className="font-mono text-slate-700">{flag.equipment}</div>
+        </div>
+      )}
+      <div className={flag.equipment ? 'sm:col-span-2' : 'sm:col-span-3'}>
+        <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Description</div>
+        <div className="text-slate-700">{flag.description || '—'}</div>
+      </div>
+      <div className="sm:col-span-3">
+        <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Codes</div>
+        <div className="font-mono text-amber-700">{flag.codes || '—'}</div>
+      </div>
+    </div>
+  );
+}
+
+// Per-flag body — only flag comment, operation desc, and confirmation
+function AIFlagRowBody({ flag }: { flag: AIFlag }) {
+  return (
+    <div className="space-y-2">
       <div className="bg-indigo-50 border border-indigo-100 rounded px-3 py-2 text-xs text-indigo-800">
         {flag.comment}
       </div>
-      <div className="grid sm:grid-cols-3 gap-3 text-xs">
-        {flag.equipment && (
+      <div className="grid sm:grid-cols-2 gap-3 text-xs">
+        {flag.operationDesc && (
           <div>
-            <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Equipment</div>
-            <div className="font-mono text-slate-700">{flag.equipment}</div>
+            <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Operation</div>
+            <div className="text-slate-700">{flag.operationDesc}</div>
           </div>
         )}
-        <div className={flag.equipment ? 'sm:col-span-2' : 'sm:col-span-3'}>
-          <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Description</div>
-          <div className="text-slate-700">{flag.description || '—'}</div>
-        </div>
-        <div>
-          <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Codes</div>
-          <div className="font-mono text-amber-700">{flag.codes || '—'}</div>
-        </div>
-        <div className="sm:col-span-2">
-          <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Confirmation</div>
-          <div className="text-slate-500">{flag.closure || '—'}</div>
-        </div>
+        {flag.closure && (
+          <div className={flag.operationDesc ? '' : 'sm:col-span-2'}>
+            <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Confirmation</div>
+            <div className="text-slate-500">{flag.closure}</div>
+          </div>
+        )}
       </div>
       {flag.suggested && (
         <div className="px-3 py-2 bg-violet-50 border border-violet-200 rounded text-xs">

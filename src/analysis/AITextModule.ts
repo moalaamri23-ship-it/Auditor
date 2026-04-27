@@ -92,7 +92,7 @@ interface WORecord {
   cause: string;
   equipment: string;
   catalog_hint: Array<{ part: string; damage: string; cause: string }>;
-  confirmations: Array<{ row: number; conf: string; conf_long: string }>;
+  confirmations: Array<{ row: number; conf: string; conf_long: string; operationDesc: string }>;
 }
 
 // ─── AI response item ───────────────────────────────────────────────────────
@@ -195,7 +195,8 @@ async function _fetchWORecords(
       ${select('cause_code_description', 'cause')},
       ${select('confirmation_text', 'conf')},
       ${select('confirmation_long_text', 'conf_long')},
-      ${select('equipment_description', 'equipment')}
+      ${select('equipment_description', 'equipment')},
+      ${select('operation_description', 'operation_desc')}
     FROM audit
     WHERE work_order_number IN (SELECT work_order_number FROM v_analysis_scope)
     ORDER BY work_order_number, _row_seq
@@ -252,6 +253,7 @@ async function _fetchWORecords(
       row: Number(r.row_seq ?? 1),
       conf: String(r.conf ?? ''),
       conf_long: String(r.conf_long ?? ''),
+      operationDesc: String(r.operation_desc ?? ''),
     });
   }
 
@@ -298,6 +300,7 @@ async function _processBatch(records: WORecord[], aiConfig: AIConfig): Promise<A
       : rec.confirmations[0];
     const closure = confEntry ? (confEntry.conf || confEntry.conf_long || '') : '';
 
+    const opDesc = confEntry?.operationDesc?.trim() || undefined;
     const flag: AIFlag = {
       woNumber: wo,
       rowSeq,
@@ -308,6 +311,7 @@ async function _processBatch(records: WORecord[], aiConfig: AIConfig): Promise<A
       codes,
       closure: closure.slice(0, 500),
       equipment: rec.equipment,
+      operationDesc: opDesc,
     };
 
     if (cat === 'false_not_listed' && ai.suggested) {

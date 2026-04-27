@@ -624,18 +624,19 @@ export async function createAIFlagsTable(): Promise<void> {
   if (!_conn) throw new Error('Database is not initialised.');
   await _conn.query(`
     CREATE OR REPLACE TABLE ai_flags (
-      wo_number     VARCHAR,
-      row_seq       INTEGER,
-      category      VARCHAR,
-      severity      VARCHAR,
-      comment       VARCHAR,
-      description   VARCHAR,
-      codes         VARCHAR,
-      closure       VARCHAR,
-      equipment     VARCHAR,
-      sugg_part     VARCHAR,
-      sugg_damage   VARCHAR,
-      sugg_cause    VARCHAR
+      wo_number      VARCHAR,
+      row_seq        INTEGER,
+      category       VARCHAR,
+      severity       VARCHAR,
+      comment        VARCHAR,
+      description    VARCHAR,
+      codes          VARCHAR,
+      closure        VARCHAR,
+      equipment      VARCHAR,
+      operation_desc VARCHAR,
+      sugg_part      VARCHAR,
+      sugg_damage    VARCHAR,
+      sugg_cause     VARCHAR
     )
   `);
 }
@@ -648,12 +649,12 @@ export async function insertAIFlagsBatch(flags: AIFlag[]): Promise<void> {
         `('${esc(f.woNumber)}',${f.rowSeq ?? 'NULL'},'${esc(f.category)}','${esc(f.severity)}','${esc(f.comment)}','${esc(
           f.description ?? ''
         )}','${esc(f.codes ?? '')}','${esc(f.closure ?? '')}','${esc(f.equipment ?? '')}','${esc(
-          f.suggested?.object_part ?? ''
-        )}','${esc(f.suggested?.damage ?? '')}','${esc(f.suggested?.cause ?? '')}')`
+          f.operationDesc ?? ''
+        )}','${esc(f.suggested?.object_part ?? '')}','${esc(f.suggested?.damage ?? '')}','${esc(f.suggested?.cause ?? '')}')`
     )
     .join(',\n');
   await _conn.query(`
-    INSERT INTO ai_flags (wo_number, row_seq, category, severity, comment, description, codes, closure, equipment, sugg_part, sugg_damage, sugg_cause)
+    INSERT INTO ai_flags (wo_number, row_seq, category, severity, comment, description, codes, closure, equipment, operation_desc, sugg_part, sugg_damage, sugg_cause)
     VALUES ${rows}
   `);
 }
@@ -676,6 +677,7 @@ export async function queryAIFlags(category?: string): Promise<AIFlag[]> {
     codes: String(r.codes ?? ''),
     closure: String(r.closure ?? ''),
     equipment: String(r.equipment ?? ''),
+    operationDesc: r.operation_desc ? String(r.operation_desc) : undefined,
     suggested:
       r.sugg_part || r.sugg_damage || r.sugg_cause
         ? {

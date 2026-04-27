@@ -262,6 +262,7 @@ export interface AIFlag {
   codes?: string;           // formatted "Part: X | Damage: Y | Cause: Z"
   closure?: string;         // confirmation short text (truncated)
   equipment?: string;
+  operationDesc?: string;   // operation description for the flagged row
   suggested?: {
     object_part: string;
     damage: string;

@@ -707,48 +707,45 @@ export default function AuditDashboard() {
         </div>
       )}
 
-      <SummaryRow ruleChecks={run.ruleChecks} aiFlagSummary={run.aiFlagSummary} />
+      <SummaryRow ruleChecks={run.ruleChecks} aiFlagSummary={run.aiFlagSummary} aiFlags={run.aiFlags ?? []} />
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <ChartCard
-            title="Error Distribution"
-            subtitle="Counts per category — both rule-based and AI-detected"
-            hint={visualSelection?.type === 'flagCategory' ? `Filtered: ${visualSelection.value}` : undefined}
-          >
-            <ErrorDistribution
-              ruleChecks={run.ruleChecks}
-              ai={run.aiFlagSummary}
-              filteredErrorDist={filteredErrorDist}
-              visualSelection={visualSelection}
-              onSelect={(key) => handleVisualClick('flagCategory', key)}
-            />
-          </ChartCard>
-        </div>
-        <div className="flex flex-col gap-6">
-          <ChartCard
-            title="Code Quality Breakdown"
-            subtitle="State of the Object/Damage/Cause description fields"
-            hint={visualSelection?.type === 'codeQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
-          >
-            <CodeQualityDonut
-              data={codeQuality}
-              visualSelection={visualSelection}
-              onSelect={(name) => handleVisualClick('codeQualitySegment', name)}
-            />
-          </ChartCard>
-          <ChartCard
-            title="Overall Quality"
-            subtitle="WOs by flag status — Valid, text quality, or missing fields"
-            hint={visualSelection?.type === 'overallQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
-          >
-            <OverallQualityRing
-              data={overallQuality}
-              visualSelection={visualSelection}
-              onSelect={(name) => handleVisualClick('overallQualitySegment', name)}
-            />
-          </ChartCard>
-        </div>
+      <ChartCard
+        title="Error Distribution"
+        subtitle="Counts per category — both rule-based and AI-detected"
+        hint={visualSelection?.type === 'flagCategory' ? `Filtered: ${visualSelection.value}` : undefined}
+      >
+        <ErrorDistribution
+          ruleChecks={run.ruleChecks}
+          ai={run.aiFlagSummary}
+          filteredErrorDist={filteredErrorDist}
+          visualSelection={visualSelection}
+          onSelect={(key) => handleVisualClick('flagCategory', key)}
+        />
+      </ChartCard>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <ChartCard
+          title="Code Quality Breakdown"
+          subtitle="State of the Object/Damage/Cause description fields"
+          hint={visualSelection?.type === 'codeQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
+        >
+          <CodeQualityDonut
+            data={codeQuality}
+            visualSelection={visualSelection}
+            onSelect={(name) => handleVisualClick('codeQualitySegment', name)}
+          />
+        </ChartCard>
+        <ChartCard
+          title="Overall Quality"
+          subtitle="WOs by flag status — Valid, text quality, or missing fields"
+          hint={visualSelection?.type === 'overallQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
+        >
+          <OverallQualityRing
+            data={overallQuality}
+            visualSelection={visualSelection}
+            onSelect={(name) => handleVisualClick('overallQualitySegment', name)}
+          />
+        </ChartCard>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -845,14 +842,19 @@ export default function AuditDashboard() {
 function SummaryRow({
   ruleChecks,
   aiFlagSummary,
+  aiFlags,
 }: {
   ruleChecks: RuleCheckResult;
   aiFlagSummary: AIFlagSummary | null;
+  aiFlags: AIFlag[];
 }) {
   const ruleFlagged = new Set(ruleChecks.flaggedWOs.map((f) => f.wo)).size;
   const aiFlagged = aiFlagSummary?.totalFlagged ?? 0;
   const totalFlags = aiFlagSummary?.totalFlags ?? 0;
-  const cleanCount = Math.max(0, ruleChecks.totalWOs - Math.max(ruleFlagged, aiFlagged));
+  const aiWoSet = new Set(aiFlags.map((f) => f.woNumber));
+  const ruleWoSet = new Set(ruleChecks.flaggedWOs.map((f) => f.wo));
+  const allFlagged = new Set([...aiWoSet, ...ruleWoSet]);
+  const cleanCount = Math.max(0, ruleChecks.totalWOs - allFlagged.size);
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <Stat label="Rule-Flagged WOs" value={ruleFlagged} accent="text-amber-600" />
