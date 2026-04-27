@@ -159,6 +159,17 @@ export const EMPTY_FILTERS: AnalysisFilters = {
   equipment: [],
 };
 
+// ─────────────────────────────────────────────
+// CHART CACHE (persisted with the run for post-refresh display)
+// ─────────────────────────────────────────────
+export interface ChartCache {
+  perWorkCenter: Array<{ workCenter: string; total: number; flagged: number }>;
+  topEquipment: Array<{ equipment: string; count: number }>;
+  codeQuality: { valid: number; notListed: number; invalidHierarchy: number; missing: number } | null;
+  overallQuality: { valid: number; entryQuality: number; missingFields: number; total: number } | null;
+  computedAt: string;
+}
+
 export interface AuditRun {
   id: string;
   projectId: string;
@@ -178,6 +189,7 @@ export interface AuditRun {
   stage: RunStage;
   hasDataInDB: boolean;        // false on cold reload — Database is in-memory
   analysisFilters: AnalysisFilters;
+  chartCache: ChartCache | null;
 }
 
 // ─────────────────────────────────────────────

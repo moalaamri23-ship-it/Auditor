@@ -104,6 +104,7 @@ export const useStore = create<AppState>()(
           stage: 'uploaded',
           hasDataInDB: false,
           analysisFilters: EMPTY_FILTERS,
+          chartCache: null,
         };
         set((state) => ({
           runs: [run, ...state.runs],

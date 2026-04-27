@@ -34,15 +34,25 @@ Detect inconsistencies and classify them. Use these category ids verbatim:
 - desc_code_conflict
    The DESCRIPTION clearly identifies a component or failure mode, but the CODES name something different (e.g. description says "bearing noise" but damage_code = "Plugged/Choked").
 - false_not_listed
-   CODES contain "Not Listed" / "Not Listed(Description Must Be Provided)" but DESCRIPTION or CONFIRMATION clearly imply a known catalog entry AND CATALOG_HINT contains a fitting tuple. ONLY raise this flag when CATALOG_HINT is non-empty and has at least one tuple that fits the described failure. The "suggested" field MUST be populated with the best matching codes from CATALOG_HINT.
+   CODES contain "Not Listed" / "Not Listed(Description Must Be Provided)" but DESCRIPTION or CONFIRMATION clearly imply a known catalog entry AND CATALOG_HINT contains a fitting tuple.
+   Do NOT raise this flag merely because codes say "Not Listed" — bare "Not Listed" codes are already caught by rule-based checks.
+   ONLY raise it when ALL of the following are true: (a) CATALOG_HINT is non-empty, (b) CATALOG_HINT contains a tuple that clearly matches the described failure, (c) DESCRIPTION or CONFIRMATION explicitly names or implies that specific component/failure mode.
+   The "suggested" field MUST be populated with the best matching codes from CATALOG_HINT.
 - desc_confirmation_mismatch
    DESCRIPTION asks for one thing but CONFIRMATION (or CONFIRMATION_LONG) reports a clearly different scope of work (e.g. description says "replace pump seal", confirmation says "painted enclosure").
+   Do NOT flag if CONFIRMATION is empty or blank — empty confirmations are caught by rule-based checks.
 - desc_code_confirmation_misalign
    All three of DESCRIPTION, CODES, CONFIRMATION contradict each other.
+   Do NOT flag if CONFIRMATION is empty or blank — empty confirmations are caught by rule-based checks.
 - generic_description
-   DESCRIPTION is too vague to be useful: "PM job", "Repair", "Maintenance", "Check equipment", or essentially blank. When this fires, the other clash checks for the same WO are unreliable.
+   DESCRIPTION is present but too vague to be useful for an auditor: "PM job", "Repair", "Maintenance", "Check equipment".
+   Do NOT raise this flag if DESCRIPTION is empty or blank — empty descriptions are already caught by rule-based checks.
+   Only flag when DESCRIPTION is PRESENT but conveys no specific information about what was requested.
 - generic_confirmation
-   CONFIRMATION provides no useful information beyond restating the description: "work done", "completed", "OK", or copy-pasted description. IMPORTANT: Before raising this flag, check CONFIRMATION_LONG — if CONFIRMATION_LONG provides sufficient detail or clear resolution of the work performed, do NOT raise generic_confirmation. Only flag when BOTH CONFIRMATION and CONFIRMATION_LONG are vague or empty.
+   CONFIRMATION provides no useful information beyond restating the description: "work done", "completed", "OK", or copy-pasted description.
+   Do NOT raise this flag if CONFIRMATION is empty or blank — empty confirmations are already caught by rule-based checks.
+   Before raising this flag, check CONFIRMATION_LONG — if CONFIRMATION_LONG provides sufficient detail or clear resolution of the work performed, do NOT raise generic_confirmation.
+   Only flag when BOTH CONFIRMATION and CONFIRMATION_LONG are PRESENT but vague or uninformative.
 
 RULES:
 - One WO can have multiple flags from different categories.
@@ -51,6 +61,7 @@ RULES:
 - Keep the comment under 150 characters.
 - For false_not_listed: if CATALOG_HINT is empty, do NOT raise this flag — there is no reference to compare against.
 - For desc_confirmation_mismatch: consider both CONFIRMATION and CONFIRMATION_LONG before flagging; if CONFIRMATION_LONG resolves the apparent mismatch, do not flag.
+- CRITICAL: Do NOT raise any flag solely because a field is empty/blank or contains "Not Listed". Rule-based pre-checks already handle those patterns. Your role is exclusively to detect quality issues in POPULATED fields — text that is present but misleading, vague, or inconsistent.
 - Return ONLY a JSON array — no prose, no markdown fences. If nothing is wrong return [].
 
 OUTPUT FORMAT — each item:

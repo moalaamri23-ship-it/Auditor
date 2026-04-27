@@ -127,7 +127,10 @@ src/
     ├── AuditDashboard.tsx        # Summary dashboard: stat cards, charts, re-run,
     │                             #   live scope count + cascading filters,
     │                             #   Power BI-style cross-filter visual selection
-    │                             #   (click any chart item to filter all other charts)
+    │                             #   (click any chart item to filter all other charts);
+    │                             #   Top Equipment counts AI+Rule flags combined;
+    │                             #   Overall Quality ring (Valid/Entry Quality/Missing Fields);
+    │                             #   chartCache persists chart data for post-refresh display
     ├── ComparisonView.tsx        # Multi-run comparison charts
     ├── IssueExplorer.tsx         # Audit Scope filter panel (same as Dashboard) +
     │                             #   WO Data tab (full raw table, scope-filtered) +
@@ -180,12 +183,14 @@ Six flag categories:
 
 | Category | Notes |
 |---|---|
-| `desc_code_conflict` | Description vs codes mismatch |
-| `false_not_listed` | "Not Listed" codes when catalog has a better match — only fires when `catalog_hint` is non-empty |
-| `desc_confirmation_mismatch` | Description vs confirmation scope mismatch; `conf_long` checked before flagging |
-| `desc_code_confirmation_misalign` | All three artefacts contradict |
-| `generic_description` | Vague/blank description |
-| `generic_confirmation` | Vague confirmation — only fires when BOTH `conf` and `conf_long` are uninformative |
+| `desc_code_conflict` | Description vs codes mismatch — only when both DESCRIPTION and CODES are populated |
+| `false_not_listed` | "Not Listed" codes when catalog has a better match — only fires when `catalog_hint` is non-empty AND description implies a specific catalog entry |
+| `desc_confirmation_mismatch` | Description vs confirmation scope mismatch; `conf_long` checked before flagging; skipped if confirmation is blank |
+| `desc_code_confirmation_misalign` | All three artefacts contradict; skipped if confirmation is blank |
+| `generic_description` | Description is PRESENT but too vague — does NOT fire for empty/blank descriptions (those are caught by rule checks) |
+| `generic_confirmation` | Confirmation is PRESENT but uninformative — does NOT fire for blank confirmations (caught by rule checks); only fires when BOTH `conf` and `conf_long` are vague |
+
+**AI prompt rule:** The AI must not flag empty fields or bare "Not Listed" codes — those are handled by `RuleChecksModule`. AI flags only populated fields that are misleading, vague, or inconsistent.
 
 ### Rule Checks (Pre-AI)
 
@@ -215,10 +220,41 @@ Catalog checks (last 4) only run when `catalogAvailable === true`.
 | Top Equipment row | `equipment` | `WHERE equipment_description = '${value}'` on `v_analysis_scope` |
 | Error Distribution bar | `flagCategory` | AI: `wo_number IN (SELECT … FROM ai_flags WHERE category = '${value}')` / Rule: in-memory WO list |
 | Code Quality donut slice | `codeQualitySegment` | SQL condition matching the quality bucket (Valid / Not Listed / Missing / Invalid Hierarchy) |
+| Overall Quality ring slice | `overallQualitySegment` | WO IN list derived from `run.aiFlags` and `run.ruleChecks.flaggedWOs` (no DB needed for the list itself) |
 
 Source charts do not re-query — they show all their items with the selected one at full opacity and the rest dimmed to 25% (`fillOpacity` on Recharts `<Cell>`, `opacity` style on table rows). Target charts re-query in the same `useEffect` that watches `[run?.id, run?.hasDataInDB, run?.lastAnalysedAt, visualSelection]`.
 
-The helper `buildVisualScopeWhere(sel, ruleChecks)` (module-level in `AuditDashboard.tsx`) returns the SQL WHERE string for a given selection, or `null` if no filter applies.
+**Error Distribution cross-filter:** When `visualSelection` is any type other than `flagCategory`, a separate `useEffect` queries `v_analysis_scope` for the matching WO set, then filters `run.aiFlags` and `run.ruleChecks.flaggedWOs` in-memory to recount per-category values shown in the chart.
+
+The helper `buildVisualScopeWhere(sel, ruleChecks)` (module-level in `AuditDashboard.tsx`) returns the SQL WHERE string. For `overallQualitySegment`, the WHERE clause is computed inline in the `useEffect` from in-memory flag lists (not via the helper).
+
+### Overall Quality Ring Chart
+
+Displayed beside Code Quality Breakdown. Three mutually exclusive segments that sum to `ruleChecks.totalWOs`:
+
+| Segment | Definition | Color |
+|---|---|---|
+| Valid | WOs with zero flags (no AI, no rule flags) | Green |
+| Entry Quality | WOs with ≥1 AI flag (text/semantic quality issues) | Indigo |
+| Missing Fields | WOs with rule flags only (no AI flags) | Amber |
+
+Computed purely from `run.aiFlags` and `run.ruleChecks.flaggedWOs` — no DB query needed. Recomputed when `visualSelection` changes via the `filteredErrorDist` effect.
+
+### Chart Cache (Post-Refresh Display)
+
+`AuditRun.chartCache: ChartCache | null` (persisted to localStorage) stores precomputed chart data after each analysis run:
+
+```typescript
+interface ChartCache {
+  perWorkCenter: Array<{ workCenter: string; total: number; flagged: number }>;
+  topEquipment: Array<{ equipment: string; count: number }>;
+  codeQuality: { valid: number; notListed: number; invalidHierarchy: number; missing: number } | null;
+  overallQuality: { valid: number; entryQuality: number; missingFields: number; total: number } | null;
+  computedAt: string;
+}
+```
+
+When `run.hasDataInDB` is false (cold reload), `AuditDashboard` restores charts from `run.chartCache` instead of querying DuckDB. A banner informs the user that cross-filtering requires re-uploading the file. Cross-filtering is disabled when DB is not loaded. `_computeChartCache()` is called inside `rerun()` after analysis completes.
 
 ### AI Settings (ModelSelector)
 

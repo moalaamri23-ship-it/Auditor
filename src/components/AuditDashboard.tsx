@@ -12,7 +12,7 @@ import { RULE_CHECK_LABELS } from '../analysis/RuleChecksModule';
 import { FLAG_CATEGORY_LABELS } from '../analysis/AITextModule';
 import type {
   AnalysisFilters, FilterOptions, FlagCategory, RuleCheckId,
-  RuleCheckResult, AIFlagSummary,
+  RuleCheckResult, AIFlagSummary, AIFlag, ChartCache, ColumnMap,
 } from '../types';
 import { EMPTY_FILTERS } from '../types';
 
@@ -22,7 +22,7 @@ const PIE_COLORS = ['#22c55e', '#f59e0b', '#ef4444', '#94a3b8'];
 
 // ─── Visual cross-filter types ───────────────────────────────────────────────
 
-type VisualSelectionType = 'workCenter' | 'equipment' | 'flagCategory' | 'codeQualitySegment';
+type VisualSelectionType = 'workCenter' | 'equipment' | 'flagCategory' | 'codeQualitySegment' | 'overallQualitySegment';
 type VisualSelection = { type: VisualSelectionType; value: string } | null;
 
 function buildVisualScopeWhere(
@@ -65,6 +65,9 @@ function buildVisualScopeWhere(
           return null;
       }
     }
+    case 'overallQualitySegment':
+      // WHERE clause is computed inline from in-memory flag lists; not via this helper
+      return null;
   }
 }
 
@@ -72,6 +75,157 @@ function buildVisualScopeWhere(
 function itemOpacity(sel: VisualSelection, type: VisualSelectionType, value: string): number {
   if (!sel || sel.type !== type) return 1;
   return sel.value === value ? 1 : 0.25;
+}
+
+// ─── Chart cache computation (run after analysis while DB is still populated) ─
+
+async function _computeChartCache(
+  columnMap: ColumnMap,
+  ruleChecks: RuleCheckResult,
+  aiFlags: AIFlag[],
+): Promise<ChartCache> {
+  const esc = (s: string) => s.replace(/'/g, "''");
+  const ruleFlaggedWOs = ruleChecks.flaggedWOs.map((f) => f.wo);
+  const ruleWOsSQL = ruleFlaggedWOs.length > 0
+    ? ruleFlaggedWOs.map((w) => `'${esc(w)}'`).join(',')
+    : null;
+
+  const equipmentSQL = ruleWOsSQL
+    ? `SELECT equipment, COUNT(DISTINCT wo_number) AS cnt
+       FROM (
+         SELECT wo_number, equipment FROM ai_flags
+         WHERE equipment IS NOT NULL AND TRIM(equipment) <> ''
+         UNION
+         SELECT s.work_order_number AS wo_number, s.equipment_description AS equipment
+         FROM v_analysis_scope s
+         WHERE s.work_order_number IN (${ruleWOsSQL})
+           AND s.equipment_description IS NOT NULL AND TRIM(s.equipment_description) <> ''
+       ) combined
+       GROUP BY equipment ORDER BY cnt DESC LIMIT 10`
+    : `SELECT equipment, COUNT(DISTINCT wo_number) AS cnt
+       FROM ai_flags
+       WHERE equipment IS NOT NULL AND TRIM(equipment) <> ''
+       GROUP BY equipment ORDER BY cnt DESC LIMIT 10`;
+
+  let perWorkCenter: ChartCache['perWorkCenter'] = [];
+  if (columnMap?.work_center) {
+    try {
+      const rows = await query(`
+        WITH base AS (
+          SELECT work_center, work_order_number FROM v_analysis_scope
+          WHERE work_center IS NOT NULL AND TRIM(work_center) <> ''
+        ),
+        flagged_wos AS (SELECT DISTINCT wo_number FROM ai_flags)
+        SELECT base.work_center AS wc,
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE base.work_order_number IN (SELECT wo_number FROM flagged_wos)) AS flagged
+        FROM base
+        GROUP BY base.work_center
+        ORDER BY total DESC
+        LIMIT 10
+      `);
+      perWorkCenter = rows.map((r) => ({
+        workCenter: String(r.wc ?? ''),
+        total: Number(r.total ?? 0),
+        flagged: Number(r.flagged ?? 0),
+      }));
+    } catch { perWorkCenter = []; }
+  }
+
+  let topEquipment: ChartCache['topEquipment'] = [];
+  try {
+    const rows = await query(equipmentSQL);
+    topEquipment = rows.map((r) => ({ equipment: String(r.equipment ?? ''), count: Number(r.cnt ?? 0) }));
+  } catch { topEquipment = []; }
+
+  let codeQuality: ChartCache['codeQuality'] = null;
+  if (columnMap?.object_part_code_description) {
+    try {
+      const [r] = await query(`
+        WITH per AS (
+          SELECT
+            UPPER(TRIM(COALESCE(object_part_code_description,''))) AS p,
+            UPPER(TRIM(COALESCE(damage_code_description,''))) AS d,
+            UPPER(TRIM(COALESCE(cause_code_description,''))) AS c
+          FROM v_analysis_scope
+        )
+        SELECT
+          COUNT(*) FILTER (WHERE p <> '' AND d <> '' AND c <> ''
+            AND p NOT LIKE 'NOT LISTED%' AND d NOT LIKE 'NOT LISTED%' AND c NOT LIKE 'NOT LISTED%') AS valid,
+          COUNT(*) FILTER (WHERE p LIKE 'NOT LISTED%' OR d LIKE 'NOT LISTED%' OR c LIKE 'NOT LISTED%') AS not_listed,
+          COUNT(*) FILTER (WHERE p = '' AND d = '' AND c = '') AS missing,
+          COUNT(*) AS total
+        FROM per
+      `);
+      const valid = Number(r?.valid ?? 0);
+      const notListed = Number(r?.not_listed ?? 0);
+      const missing = Number(r?.missing ?? 0);
+      const total = Number(r?.total ?? 0);
+      codeQuality = { valid, notListed, missing, invalidHierarchy: Math.max(0, total - valid - notListed - missing) };
+    } catch { codeQuality = null; }
+  }
+
+  const aiWoSet = new Set(aiFlags.map((f) => f.woNumber));
+  const ruleWoSet = new Set(ruleChecks.flaggedWOs.map((f) => f.wo));
+  const totalWOs = ruleChecks.totalWOs;
+  const entryQuality = aiWoSet.size;
+  const missingFields = [...ruleWoSet].filter((wo) => !aiWoSet.has(wo)).length;
+  const overallQuality: ChartCache['overallQuality'] = {
+    valid: Math.max(0, totalWOs - entryQuality - missingFields),
+    entryQuality,
+    missingFields,
+    total: totalWOs,
+  };
+
+  return { perWorkCenter, topEquipment, codeQuality, overallQuality, computedAt: new Date().toISOString() };
+}
+
+// ─── Overall Quality ring chart ──────────────────────────────────────────────
+
+const OVERALL_QUALITY_COLORS = ['#22c55e', '#6366f1', '#f59e0b'];
+
+function OverallQualityRing({
+  data,
+  visualSelection,
+  onSelect,
+}: {
+  data: { valid: number; entryQuality: number; missingFields: number; total: number } | null;
+  visualSelection: VisualSelection;
+  onSelect: (name: string) => void;
+}) {
+  if (!data || data.total === 0) return <Empty />;
+  const rows = [
+    { name: 'Valid', value: data.valid },
+    { name: 'Entry Quality', value: data.entryQuality },
+    { name: 'Missing Fields', value: data.missingFields },
+  ].filter((r) => r.value > 0);
+  if (rows.length === 0) return <Empty />;
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <PieChart style={{ cursor: 'pointer' }}>
+        <Pie
+          data={rows}
+          dataKey="value"
+          nameKey="name"
+          innerRadius={60}
+          outerRadius={90}
+          paddingAngle={2}
+          onClick={(entry) => onSelect(entry.name)}
+        >
+          {rows.map((r, i) => (
+            <Cell
+              key={i}
+              fill={OVERALL_QUALITY_COLORS[i % OVERALL_QUALITY_COLORS.length]}
+              fillOpacity={itemOpacity(visualSelection, 'overallQualitySegment', r.name)}
+              style={{ cursor: 'pointer' }}
+            />
+          ))}
+        </Pie>
+        <Tooltip />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+      </PieChart>
+    </ResponsiveContainer>
+  );
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -97,6 +251,13 @@ export default function AuditDashboard() {
     notListed: number;
     invalidHierarchy: number;
     missing: number;
+  } | null>(null);
+  const [overallQuality, setOverallQuality] = useState<{
+    valid: number; entryQuality: number; missingFields: number; total: number;
+  } | null>(null);
+  const [filteredErrorDist, setFilteredErrorDist] = useState<{
+    perCheck: Partial<Record<RuleCheckId, number>>;
+    byCategory: Partial<Record<FlagCategory, number>>;
   } | null>(null);
 
   // Visual cross-filter state
@@ -139,47 +300,85 @@ export default function AuditDashboard() {
 
   // ── Chart data loading (re-runs on visual selection change) ─────────────────
   useEffect(() => {
-    if (!run?.hasDataInDB) return;
+    if (!run?.hasDataInDB) {
+      // Cold load — restore from persisted cache
+      const cache = run?.chartCache;
+      if (cache) {
+        setPerWorkCenter(cache.perWorkCenter);
+        setTopEquipment(cache.topEquipment);
+        setCodeQuality(cache.codeQuality);
+        setOverallQuality(cache.overallQuality);
+      }
+      return;
+    }
     void (async () => {
       const ruleChecks = run.ruleChecks ?? null;
-      const visualWhere = buildVisualScopeWhere(visualSelection, ruleChecks);
+      const esc = (s: string) => s.replace(/'/g, "''");
       const isEqSource = visualSelection?.type === 'equipment';
       const isWCSource = visualSelection?.type === 'workCenter';
       const isCQSource = visualSelection?.type === 'codeQualitySegment';
+      const isOQSource = visualSelection?.type === 'overallQualitySegment';
+
+      // Compute visualWhere — handle overallQualitySegment inline (not via buildVisualScopeWhere)
+      let visualWhere: string | null = null;
+      if (visualSelection?.type === 'overallQualitySegment') {
+        const aiWOs = (run.aiFlags ?? []).map((f) => f.woNumber);
+        const ruleChecksLocal = run.ruleChecks;
+        const ruleWOs = ruleChecksLocal?.flaggedWOs.map((f) => f.wo) ?? [];
+        if (visualSelection.value === 'Entry Quality') {
+          const list = aiWOs.map((w) => `'${esc(w)}'`).join(',');
+          visualWhere = list ? `work_order_number IN (${list})` : 'FALSE';
+        } else if (visualSelection.value === 'Missing Fields') {
+          const aiSet = new Set(aiWOs);
+          const ruleOnly = ruleWOs.filter((w) => !aiSet.has(w));
+          const list = ruleOnly.map((w) => `'${esc(w)}'`).join(',');
+          visualWhere = list ? `work_order_number IN (${list})` : 'FALSE';
+        } else if (visualSelection.value === 'Valid') {
+          const allFlagged = [...new Set([...aiWOs, ...ruleWOs])];
+          const list = allFlagged.map((w) => `'${esc(w)}'`).join(',');
+          visualWhere = list ? `work_order_number NOT IN (${list})` : null;
+        }
+      } else {
+        visualWhere = buildVisualScopeWhere(visualSelection, ruleChecks);
+      }
+
+      // Precompute rule-flagged WO list for combined equipment SQL
+      const ruleFlaggedWOs = ruleChecks?.flaggedWOs.map((f) => f.wo) ?? [];
+      const ruleWOsSQL = ruleFlaggedWOs.length > 0
+        ? ruleFlaggedWOs.map((w) => `'${esc(w)}'`).join(',')
+        : null;
+
+      const buildEquipmentSQL = (extraWhere: string | null) => {
+        const aiWhere = extraWhere
+          ? `wo_number IN (SELECT work_order_number FROM v_analysis_scope WHERE ${extraWhere})`
+          : null;
+        const ruleWhere = extraWhere
+          ? `s.work_order_number IN (SELECT work_order_number FROM v_analysis_scope WHERE ${extraWhere})`
+          : null;
+        const aiFilter = aiWhere ? `AND ${aiWhere}` : '';
+        const ruleBase = ruleWOsSQL
+          ? `UNION
+             SELECT s.work_order_number AS wo_number, s.equipment_description AS equipment
+             FROM v_analysis_scope s
+             WHERE s.work_order_number IN (${ruleWOsSQL})
+               AND s.equipment_description IS NOT NULL AND TRIM(s.equipment_description) <> ''
+               ${ruleWhere ? `AND ${ruleWhere}` : ''}`
+          : '';
+        return `
+          SELECT equipment, COUNT(DISTINCT wo_number) AS cnt
+          FROM (
+            SELECT wo_number, equipment FROM ai_flags
+            WHERE equipment IS NOT NULL AND TRIM(equipment) <> ''
+            ${aiFilter}
+            ${ruleBase}
+          ) combined
+          GROUP BY equipment ORDER BY cnt DESC LIMIT 10
+        `;
+      };
 
       // Top Equipment — re-query unless equipment is the source
       try {
-        let sql: string;
-        if (isEqSource) {
-          // Source: keep all equipment data, just apply highlighting in UI
-          sql = `
-            SELECT equipment, COUNT(*) AS cnt
-            FROM ai_flags
-            WHERE equipment IS NOT NULL AND TRIM(equipment) <> ''
-            GROUP BY equipment
-            ORDER BY cnt DESC
-            LIMIT 10
-          `;
-        } else if (visualWhere) {
-          sql = `
-            SELECT a.equipment, COUNT(*) AS cnt
-            FROM ai_flags a
-            WHERE a.equipment IS NOT NULL AND TRIM(a.equipment) <> ''
-              AND a.wo_number IN (SELECT work_order_number FROM v_analysis_scope WHERE ${visualWhere})
-            GROUP BY a.equipment
-            ORDER BY cnt DESC
-            LIMIT 10
-          `;
-        } else {
-          sql = `
-            SELECT equipment, COUNT(*) AS cnt
-            FROM ai_flags
-            WHERE equipment IS NOT NULL AND TRIM(equipment) <> ''
-            GROUP BY equipment
-            ORDER BY cnt DESC
-            LIMIT 10
-          `;
-        }
+        const sql = isEqSource ? buildEquipmentSQL(null) : buildEquipmentSQL(visualWhere);
         const rows = await query(sql);
         setTopEquipment(rows.map((r) => ({ equipment: String(r.equipment ?? ''), count: Number(r.cnt ?? 0) })));
       } catch {
@@ -292,8 +491,112 @@ export default function AuditDashboard() {
       } catch {
         setCodeQuality(null);
       }
+
+      // Overall Quality — pure in-memory (no DB), but respect visual filter when active
+      // When overallQualitySegment is the source, keep unfiltered counts for highlighting
+      if (!isOQSource && visualWhere && run.aiFlags && run.ruleChecks) {
+        // When a visual filter is active, overall quality will be re-derived in the
+        // filteredErrorDist effect which already resolves the WO set from DB.
+        // Here we just let it stay as-is (updated by that effect).
+      } else {
+        // No filter or OQ is the source: show unfiltered counts
+        const aiSet = new Set((run.aiFlags ?? []).map((f) => f.woNumber));
+        const ruleSet = new Set(run.ruleChecks?.flaggedWOs.map((f) => f.wo) ?? []);
+        const total = run.ruleChecks?.totalWOs ?? 0;
+        const eq = aiSet.size;
+        const mf = [...ruleSet].filter((w) => !aiSet.has(w)).length;
+        setOverallQuality({ valid: Math.max(0, total - eq - mf), entryQuality: eq, missingFields: mf, total });
+      }
     })();
   }, [run?.id, run?.hasDataInDB, run?.lastAnalysedAt, visualSelection]);
+
+  // ── Error Distribution cross-filter + Overall Quality filtered update ────────
+  useEffect(() => {
+    const ruleChecks = run?.ruleChecks ?? null;
+
+    // When no filter or flagCategory is source (ED is the source), reset to unfiltered
+    if (!visualSelection || visualSelection.type === 'flagCategory' || !run?.hasDataInDB) {
+      setFilteredErrorDist(null);
+      // Recompute unfiltered overall quality from in-memory data
+      if (ruleChecks) {
+        const aiSet = new Set((run?.aiFlags ?? []).map((f) => f.woNumber));
+        const ruleSet = new Set(ruleChecks.flaggedWOs.map((f) => f.wo));
+        const total = ruleChecks.totalWOs;
+        const eq = aiSet.size;
+        const mf = [...ruleSet].filter((w) => !aiSet.has(w)).length;
+        setOverallQuality({ valid: Math.max(0, total - eq - mf), entryQuality: eq, missingFields: mf, total });
+      }
+      return;
+    }
+
+    // overallQualitySegment is the source — ED filters to that WO set but OQ stays unfiltered
+    const isOQSource = visualSelection.type === 'overallQualitySegment';
+
+    void (async () => {
+      if (!ruleChecks) return;
+      const esc = (s: string) => s.replace(/'/g, "''");
+
+      let visualWhere: string | null = null;
+      if (isOQSource) {
+        const aiWOs = (run.aiFlags ?? []).map((f) => f.woNumber);
+        const ruleWOs = ruleChecks.flaggedWOs.map((f) => f.wo);
+        if (visualSelection.value === 'Entry Quality') {
+          const list = aiWOs.map((w) => `'${esc(w)}'`).join(',');
+          visualWhere = list ? `work_order_number IN (${list})` : 'FALSE';
+        } else if (visualSelection.value === 'Missing Fields') {
+          const aiSet = new Set(aiWOs);
+          const ruleOnly = ruleWOs.filter((w) => !aiSet.has(w));
+          const list = ruleOnly.map((w) => `'${esc(w)}'`).join(',');
+          visualWhere = list ? `work_order_number IN (${list})` : 'FALSE';
+        } else if (visualSelection.value === 'Valid') {
+          const allFlagged = [...new Set([...aiWOs, ...ruleWOs])];
+          const list = allFlagged.map((w) => `'${esc(w)}'`).join(',');
+          visualWhere = list ? `work_order_number NOT IN (${list})` : null;
+        }
+      } else {
+        visualWhere = buildVisualScopeWhere(visualSelection, ruleChecks);
+      }
+
+      if (!visualWhere) { setFilteredErrorDist(null); return; }
+
+      try {
+        const woRows = await query(
+          `SELECT DISTINCT work_order_number AS wo FROM v_analysis_scope WHERE ${visualWhere}`
+        );
+        const woSet = new Set(woRows.map((r) => String(r.wo ?? '')));
+
+        const byCategory: Partial<Record<FlagCategory, number>> = {};
+        for (const f of (run.aiFlags ?? [])) {
+          if (woSet.has(f.woNumber)) {
+            byCategory[f.category] = (byCategory[f.category] ?? 0) + 1;
+          }
+        }
+
+        const perCheck: Partial<Record<RuleCheckId, number>> = {};
+        for (const fw of ruleChecks.flaggedWOs) {
+          if (woSet.has(fw.wo)) {
+            for (const checkId of fw.checks) {
+              perCheck[checkId] = (perCheck[checkId] ?? 0) + 1;
+            }
+          }
+        }
+
+        setFilteredErrorDist({ perCheck, byCategory });
+
+        // Also update overall quality for the filtered WO set (unless OQ is the source)
+        if (!isOQSource) {
+          const filteredAiSet = new Set((run.aiFlags ?? []).filter((f) => woSet.has(f.woNumber)).map((f) => f.woNumber));
+          const filteredRuleSet = new Set(ruleChecks.flaggedWOs.filter((f) => woSet.has(f.wo)).map((f) => f.wo));
+          const total = woSet.size;
+          const eq = filteredAiSet.size;
+          const mf = [...filteredRuleSet].filter((w) => !filteredAiSet.has(w)).length;
+          setOverallQuality({ valid: Math.max(0, total - eq - mf), entryQuality: eq, missingFields: mf, total });
+        }
+      } catch {
+        setFilteredErrorDist(null);
+      }
+    })();
+  }, [visualSelection, run?.hasDataInDB, run?.id, run?.lastAnalysedAt]);
 
   if (!run) {
     return <div className="flex items-center justify-center h-full text-slate-400 text-sm">No active run.</div>;
@@ -334,6 +637,7 @@ export default function AuditDashboard() {
         cancelRef: cancelRef.current,
       });
       const flags = results.aiFlagSummary ? await queryAIFlags() : [];
+      const chartCache = await _computeChartCache(run.columnMap, results.ruleChecks, flags);
       updateRun(run.id, {
         ruleChecks: results.ruleChecks,
         aiFlagSummary: results.aiFlagSummary ?? null,
@@ -341,6 +645,7 @@ export default function AuditDashboard() {
         analysisFilters: filters,
         stage: 'analysed',
         lastAnalysedAt: new Date().toISOString(),
+        chartCache,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -390,13 +695,25 @@ export default function AuditDashboard() {
 
       {visualSelection && (
         <div className="text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded px-3 py-2">
-          Filtered by <strong>{visualSelection.type === 'workCenter' ? 'Work Center' : visualSelection.type === 'equipment' ? 'Equipment' : visualSelection.type === 'codeQualitySegment' ? 'Code Quality' : 'Flag Category'}</strong>: {visualSelection.value} — charts are showing data within this selection.
+          Filtered by <strong>{
+            visualSelection.type === 'workCenter' ? 'Work Center' :
+            visualSelection.type === 'equipment' ? 'Equipment' :
+            visualSelection.type === 'codeQualitySegment' ? 'Code Quality' :
+            visualSelection.type === 'overallQualitySegment' ? 'Overall Quality' :
+            'Flag Category'
+          }</strong>: {visualSelection.value} — charts are showing data within this selection.
+        </div>
+      )}
+
+      {!run.hasDataInDB && run.chartCache && (
+        <div className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded px-3 py-2">
+          Charts show cached data from the last analysis. Re-upload the file to enable cross-filtering.
         </div>
       )}
 
       <SummaryRow ruleChecks={run.ruleChecks} aiFlagSummary={run.aiFlagSummary} />
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-3 gap-6">
         <ChartCard
           title="Error Distribution"
           subtitle="Counts per category — both rule-based and AI-detected"
@@ -405,6 +722,7 @@ export default function AuditDashboard() {
           <ErrorDistribution
             ruleChecks={run.ruleChecks}
             ai={run.aiFlagSummary}
+            filteredErrorDist={filteredErrorDist}
             visualSelection={visualSelection}
             onSelect={(key) => handleVisualClick('flagCategory', key)}
           />
@@ -418,6 +736,17 @@ export default function AuditDashboard() {
             data={codeQuality}
             visualSelection={visualSelection}
             onSelect={(name) => handleVisualClick('codeQualitySegment', name)}
+          />
+        </ChartCard>
+        <ChartCard
+          title="Overall Quality"
+          subtitle="WOs by flag status — Valid, text quality, or missing fields"
+          hint={visualSelection?.type === 'overallQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
+        >
+          <OverallQualityRing
+            data={overallQuality}
+            visualSelection={visualSelection}
+            onSelect={(name) => handleVisualClick('overallQualitySegment', name)}
           />
         </ChartCard>
       </div>
@@ -468,7 +797,7 @@ export default function AuditDashboard() {
         </ChartCard>
         <ChartCard
           title="Top Problem Equipment"
-          subtitle="Equipment with the most AI-detected flags"
+          subtitle="Equipment with the most flags — AI and rule-based combined"
           hint={visualSelection?.type === 'equipment' ? `Filtered: ${visualSelection.value}` : undefined}
         >
           <TopEquipmentTable
@@ -575,11 +904,13 @@ function ChartCard({
 function ErrorDistribution({
   ruleChecks,
   ai,
+  filteredErrorDist,
   visualSelection,
   onSelect,
 }: {
   ruleChecks: RuleCheckResult;
   ai: AIFlagSummary | null;
+  filteredErrorDist: { perCheck: Partial<Record<RuleCheckId, number>>; byCategory: Partial<Record<FlagCategory, number>> } | null;
   visualSelection: VisualSelection;
   onSelect: (key: string) => void;
 }) {
@@ -587,7 +918,7 @@ function ErrorDistribution({
     .map((id) => ({
       key: id,
       label: RULE_CHECK_LABELS[id].label,
-      value: ruleChecks.perCheck[id]?.matched ?? 0,
+      value: filteredErrorDist ? (filteredErrorDist.perCheck[id] ?? 0) : (ruleChecks.perCheck[id]?.matched ?? 0),
       type: 'Rule' as const,
     }))
     .filter((d) => d.value > 0);
@@ -597,7 +928,7 @@ function ErrorDistribution({
         .map((c) => ({
           key: c,
           label: FLAG_CATEGORY_LABELS[c],
-          value: ai.byCategory[c] ?? 0,
+          value: filteredErrorDist ? (filteredErrorDist.byCategory[c] ?? 0) : (ai.byCategory[c] ?? 0),
           type: 'AI' as const,
         }))
         .filter((d) => d.value > 0)
