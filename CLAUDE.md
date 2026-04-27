@@ -22,17 +22,16 @@ Accepts a single denormalized SAP PM export (Excel/CSV) and produces an engineer
 |---|---|
 | Framework | React 19 + TypeScript 5 + Vite 6 |
 | Styling | Tailwind CSS via CDN (in index.html) — no PostCSS/npm package |
-| State | Zustand 5 + localStorage (key: `sap-auditor-v1`) |
+| State | Zustand 5 + localStorage (key: `sap-auditor-v2`) |
 | SQL engine | DuckDB WASM (in-browser, loaded via `getJsDelivrBundles()` from CDN) |
 | File parsing | PapaParse (CSV) + XLSX (Excel) |
-| Charts | Recharts (Phase 2+) |
-| Virtualisation | `@tanstack/react-virtual` (WO Data View in IssueExplorer) |
+| Charts | Recharts |
 
 ### The Hard Rule
 
 **DuckDB handles all calculations. AI only receives aggregated summaries.**
 
-- Every metric (counts, rates, durations, MTBF, MTTR) comes from DuckDB SQL
+- Every metric (counts, rates, MTBF, MTTR) comes from DuckDB SQL
 - AI never sees raw rows — only `{ aggregates, anomaly_samples[], data_quality_flags }`
 - If data quality score < 20 or sample count < 3 → return `INSUFFICIENT_DATA`, never call AI
 
@@ -41,21 +40,25 @@ Accepts a single denormalized SAP PM export (Excel/CSV) and produces an engineer
 ```
 Upload → FileParser → SchemaDetector → ValidationService → Zustand session
 → ParsedDataCache (temp rows) → DuckDB load → runProfiling → DataProfiler screen
-→ AnalysisEngine (DuckDB modules + AI triangle check) → AuditDashboard / AnalysisView
+→ SchemaMapper (period-based auto date filters applied here)
+→ AnalysisEngine (RuleChecksModule + AITextModule) → AuditDashboard / IssueExplorer
 ```
 
 ### DuckDB View Hierarchy
 
-Three views are created after every load. All analysis queries MUST use the correct view:
+Four views/tables are created after every load. All analysis queries MUST use the correct view:
 
 | View | Logic | Use for |
 |---|---|---|
-| `v_wo_primary` | One row per WO (`_row_seq = 1`) | WO counts, MTBF, MTTR, failure rates |
+| `v_wo_primary` | One row per WO (`_row_seq = 1`) | WO counts, MTBF, MTTR, failure rates, filter options |
 | `v_confirmations` | Rows with non-empty `confirmation_text` | Text analysis, confirmation quality |
-| `audit` | Full typed table (all rows) | Raw exploration only |
-| `v_analysis_scope` | WOs with all three artefacts present | AI triangle check input |
+| `audit` | Full typed table (all rows) | Raw exploration (WO Data tab) |
+| `v_analysis_scope` | Filtered subset of `v_wo_primary` | All rule checks and AI analysis |
+| `ai_flags` | Persisted AI flag results | Dashboard charts, Issues AI tab |
 
 **Never use `audit` for aggregations if the dataset is `CONFIRMATION_LEVEL` granularity.**
+
+`v_analysis_scope` is rebuilt by `createAnalysisScopeView()` before every pipeline run and also implicitly used by `getLiveScopeCount()` / `getCascadingFilterOptions()` (which query `v_wo_primary` directly without mutating the view).
 
 ### Granularity Classification
 
@@ -67,76 +70,133 @@ Computed in `runProfiling` immediately after load:
 | 1.2 – 3.0 | `MIXED` | Use `v_wo_primary` for counts |
 | > 3.0 | `CONFIRMATION_LEVEL` | Always deduplicate, show banner |
 
+### Date Parsing
+
+`_createTypedTable()` in `DuckDBService.ts` converts date columns using a `COALESCE` chain that handles:
+- ISO `YYYY-MM-DD` (TRY_CAST)
+- US short date `M/D/YYYY`
+- European `D/M/YYYY`
+- Dot-separated `D.M.YYYY`
+- Slash `YYYY/MM/DD`
+- Excel serial numbers (days since 1899-12-30)
+
+Only columns listed in `TIMESTAMP_COLUMNS` (`src/constants.ts`) are treated as dates.
+
 ### File Structure
 
 ```
 src/
-├── types.ts                      # All TypeScript interfaces
-├── constants.ts                  # SAP_COLUMN_KEYWORDS, GRANULARITY thresholds, AI_PROVIDERS
+├── types.ts                      # All TypeScript interfaces (Screen, AuditProject, AuditRun,
+│                                 #   AnalysisFilters, FilterOptions, AIFlag, etc.)
+├── constants.ts                  # SAP_COLUMN_KEYWORDS, GRANULARITY thresholds, AI_PROVIDERS,
+│                                 #   TIMESTAMP_COLUMNS, TEXT_COLUMNS, IDENTIFIER_COLUMNS
 ├── store/
-│   └── useStore.ts               # Zustand store (sessions, activeSessionId, aiConfig, screen)
+│   └── useStore.ts               # Zustand store: projects[], runs[], activeProjectId,
+│                                 #   activeRunId, aiConfig, currentScreen
 ├── services/
 │   ├── FileParser.ts             # PapaParse + XLSX → ParsedFile
 │   ├── SchemaDetector.ts         # Keyword-scoring column mapping → ColumnMap
 │   ├── ValidationService.ts      # Structural validation → ValidationReport
 │   ├── ParsedDataCache.ts        # Temp in-memory cache for raw rows (cleared after DuckDB load)
 │   ├── DuckDBService.ts          # DuckDB WASM init, loadData(), runProfiling(), query(),
+│   │                             #   getFilterOptions(), getCascadingFilterOptions(),
+│   │                             #   getLiveScopeCount(), createAnalysisScopeView(),
 │   │                             #   ai_flags table management
-│   └── AIService.ts              # Provider-agnostic AI calls, fetchModels(), TieredModels
+│   ├── AIService.ts              # Provider-agnostic AI calls, fetchModels(), TieredModels
+│   └── FailureCatalogService.ts  # Loads bundled/user failure catalog into DuckDB
 ├── analysis/
-│   ├── analysisTypes.ts          # Shared types for analysis modules
-│   ├── AnalysisEngine.ts         # Orchestrates all modules; accepts aiConfig + cancel support
-│   ├── DataIntegrityModule.ts    # SQL-based data integrity checks
-│   ├── ReliabilityModule.ts      # SQL-based MTBF/MTTR/availability
-│   ├── ProcessModule.ts          # SQL-based process compliance
-│   └── AITextModule.ts           # Triangle check: AI analysis of symptom/codes/closure
+│   ├── AnalysisEngine.ts         # Orchestrates pipeline: createAnalysisScopeView →
+│   │                             #   runRuleChecks → runAITextModule
+│   ├── RuleChecksModule.ts       # SQL-based pre-checks (7 rules); not_listed_codes only
+│   │                             #   fires when catalogAvailable === true
+│   └── AITextModule.ts           # AI semantic audit: 6 flag categories, batched 20 WOs/call,
+│                                 #   conf_long used to verify before flagging
 └── components/
-    ├── Icon.tsx                  # Custom SVG icon system
+    ├── Icon.tsx                  # Custom SVG icon system (no third-party icon lib)
     ├── ModelSelector.tsx         # Live model picker: search, tiers, favorites, My Models
-    ├── Header.tsx                # App header with tabs + AI config panel
-    ├── SessionsDashboard.tsx     # Sessions grid + new session CTA
+    ├── Header.tsx                # App header with tabs + run selector + run delete
+    ├── SessionsDashboard.tsx     # Project grid + new project CTA
+    ├── ProjectHomeView.tsx       # Run list for the active project (View / Delete per run)
+    ├── AuditInitWizard.tsx       # New project wizard: name, type, period, bank pattern
     ├── UploadZone.tsx            # Drag-and-drop + parse + validate → SchemaMapper
-    ├── SchemaMapper.tsx          # Column mapping confirmation → DuckDB load → DataProfiler
-    ├── DataProfiler.tsx          # Profile results + AI analysis trigger + progress/cancel
-    ├── AuditDashboard.tsx        # Summary dashboard: stat cards, AI flag summary, re-run
-    ├── AnalysisView.tsx          # Per-module deep-dive + AIFlagsPanel (triangle check results)
-    ├── IssueExplorer.tsx         # WO Data View (virtualised) + DuckDB Issues tabs
-    ├── FilterPanel.tsx           # Shared filter controls
-    ├── AIInsightsPanel.tsx       # AI insights sidebar
+    ├── SchemaMapper.tsx          # Column mapping → DuckDB load → runProfiling →
+    │                             #   auto date filter computation → DataProfiler
+    ├── DataProfiler.tsx          # Profile results, auto-filter banner, live scope count,
+    │                             #   cascading filter options, Run Pre-Checks trigger
+    ├── PreChecksView.tsx         # Rule check results before AI analysis
+    ├── AuditDashboard.tsx        # Summary dashboard: stat cards, charts, re-run,
+    │                             #   live scope count + cascading filters
+    ├── ComparisonView.tsx        # Multi-run comparison charts
+    ├── IssueExplorer.tsx         # WO Data (full raw table) + Rule Flags (expandable rows)
+    │                             #   + AI Flags tabs
+    ├── FilterPanel.tsx           # Audit Scope filter controls:
+    │                             #   Date / Work Center / Catalog / Func. Location / Equipment
     └── SettingsScreen.tsx        # AI provider/model/key config with live model fetching
 ```
 
-### Session Lifecycle
+### Project & Run Lifecycle
 
 ```
-Session.stage: 'uploaded' → 'mapped' → 'profiled' → 'analysed'
-Session.hasDataInDuckDB: false (reset on page refresh — DuckDB is in-memory)
+AuditProject  (persisted, 1:N → AuditRun)
+  id, name, type (TOTAL | SINGLE_BANK), period (WEEKLY | BIWEEKLY | QUARTERLY | YEARLY)
+  bankPattern (optional SAP LIKE pattern)
+
+AuditRun.stage: 'init' → 'uploaded' → 'mapped' → 'profiled' → 'pre-checked' → 'analysed'
+AuditRun.hasDataInDB: false on cold reload — DuckDB is in-memory, requires re-upload
 ```
 
-If `hasDataInDuckDB = false` on an existing session, the user must re-upload the file. Session metadata (column map, profile, validation, aiFlags) is preserved in localStorage.
+Navigation: clicking a project card → `project-home` screen (run list) if runs exist, else `upload`. Project tabs (Data / Pre-Checks / Audit / Comparison / Issues) are visible when `run.stage` is `profiled`, `pre-checked`, or `analysed` — not gated on `hasDataInDB`, so stored results are viewable after refresh.
 
-### AI Triangle Check
+### Audit Scope Filters
 
-`AITextModule.ts` evaluates every WO against three SAP PM artefacts:
+`AnalysisFilters` shape (stored on each `AuditRun`):
+```typescript
+{ dateFrom, dateTo, workCenter[], functionalLocation[], failureCatalog[], equipment[] }
+```
 
-| Artefact | SAP field |
+- Filters are applied by `createAnalysisScopeView()` to produce `v_analysis_scope`
+- `getLiveScopeCount()` returns a live WO count for the current filter selection without mutating the view
+- `getCascadingFilterOptions()` re-fetches each option list with all *other* active filters applied (faceted navigation); each component debounces filter changes at 250 ms
+- On new run creation, `SchemaMapper` auto-computes `dateFrom` = previous run's `dateMax + 1 day`; falls back to last `<period>` of new data if no records exist beyond that date
+
+### AI Text Module
+
+`AITextModule.ts` evaluates WOs in batches of 20. Fields sent per WO:
+
+| Field | SAP column |
 |---|---|
-| Symptom | `notification_description` / `work_order_description` |
-| Classification | `reliability_code_1/2/3`, `failure_mode`, `cause_code` |
-| Closure | `confirmation_text` / `confirmation_long_text` |
+| `description` | `work_order_description` |
+| `part / damage / cause` | `object_part_code_description`, `damage_code_description`, `cause_code_description` |
+| `conf` | `confirmation_text` |
+| `conf_long` | `confirmation_long_text` |
+| `catalog_hint` | up to 40 valid tuples from `failure_catalog` for that WO's catalog |
 
-Six flag categories — 3 clash checks + 3 quality checks:
+Six flag categories:
 
-| Category | Type |
+| Category | Notes |
 |---|---|
-| `symptom_code_conflict` | Clash |
-| `symptom_closure_conflict` | Clash |
-| `code_closure_conflict` | Clash |
-| `incomplete_classification` | Quality |
-| `poor_closure` | Quality |
-| `generic_symptom` | Quality |
+| `desc_code_conflict` | Description vs codes mismatch |
+| `false_not_listed` | "Not Listed" codes when catalog has a better match — only fires when `catalog_hint` is non-empty |
+| `desc_confirmation_mismatch` | Description vs confirmation scope mismatch; `conf_long` checked before flagging |
+| `desc_code_confirmation_misalign` | All three artefacts contradict |
+| `generic_description` | Vague/blank description |
+| `generic_confirmation` | Vague confirmation — only fires when BOTH `conf` and `conf_long` are uninformative |
 
-Flags are persisted in `session.aiFlags[]` (localStorage) and in the DuckDB `ai_flags` table. Batched 20 WOs/call with cancel support. Restored from session on re-upload via `restoreAIFlagsFromSession()`.
+### Rule Checks (Pre-AI)
+
+Run by `RuleChecksModule.ts` against `v_analysis_scope`:
+
+| Rule | Condition |
+|---|---|
+| `missing_confirmation` | Both `confirmation_text` and `confirmation_long_text` blank |
+| `not_listed_codes` | Any code field starts with "Not Listed" — **skipped if `catalogAvailable === false`** |
+| `missing_scoping_text` | `code_group` blank |
+| `catalog_invalid_object_part` | Object part not in catalog for that failure_catalog_desc |
+| `catalog_invalid_damage_for_part` | Damage not valid under that object part |
+| `catalog_invalid_cause_for_damage` | Cause not valid under that damage |
+| `catalog_missing_match` | Any of the four catalog fields blank |
+
+Catalog checks (last 4) only run when `catalogAvailable === true`.
 
 ### AI Settings (ModelSelector)
 
@@ -149,29 +209,11 @@ Flags are persisted in `session.aiFlags[]` (localStorage) and in the DuckDB `ai_
 
 ### Column Mapping
 
-`SchemaDetector.ts` scores each raw header against `SAP_COLUMN_KEYWORDS` (keyword lists per canonical column). Score ≥ 40 → mapped; score ≥ 80 → HIGH confidence. Priority columns claim headers first (work_order_number, equipment, timestamps).
+`SchemaDetector.ts` scores each raw header against `SAP_COLUMN_KEYWORDS` (keyword lists per canonical column). Score ≥ 40 → mapped; score ≥ 80 → HIGH confidence. Priority columns claim headers first (`work_order_number`, `equipment`, timestamps).
 
 ### UI Design System
 
-Follows `reliability_app_UI` skill exactly:
 - `slate-900` header, `slate-50` body, `brand-500/600` accent
 - Inter (sans) + JetBrains Mono (mono) fonts
 - Custom `<Icon>` component — no third-party icon lib
-- `merged-table`, `animate-enter`, `scroll-thin` CSS classes in index.html
-- Floating chatbot (right half-circle) — Phase 3
-
-### Analysis Modules
-
-All SQL-first via `AnalysisEngine.ts`:
-1. Data Integrity Audit
-2. Reliability Analysis (MTBF/MTTR — with validity caveats based on data quality)
-3. Process Compliance
-4. Failure Pattern Detection
-5. Repetitive Failure Analysis
-6. Hidden Downtime Detection
-7. Confirmation Quality Scoring
-8. Reliability Maturity Scoring
-9. Anomaly Ranking
-10. AI Triangle Check (text-based, runs after DuckDB modules if API key present)
-
-The report audits the **conditions** required for each metric to be valid — it does not just present numbers.
+- `animate-enter`, `scroll-thin` CSS classes defined in `index.html`
