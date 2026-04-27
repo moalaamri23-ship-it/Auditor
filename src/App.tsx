@@ -10,6 +10,7 @@ import PreChecksView from './components/PreChecksView';
 import AuditDashboard from './components/AuditDashboard';
 import ComparisonView from './components/ComparisonView';
 import IssueExplorer from './components/IssueExplorer';
+import DataViewScreen from './components/DataViewScreen';
 import SettingsScreen from './components/SettingsScreen';
 import { useStore } from './store/useStore';
 import { initDB } from './services/DuckDBService';
@@ -98,6 +99,7 @@ export default function App() {
             {currentScreen === 'analysis' && <AuditDashboard />}
             {currentScreen === 'comparison' && <ComparisonView />}
             {currentScreen === 'explorer' && <IssueExplorer />}
+            {currentScreen === 'data-view' && <DataViewScreen />}
             {currentScreen === 'settings' && <SettingsScreen />}
           </>
         )}

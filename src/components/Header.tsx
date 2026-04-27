@@ -14,6 +14,7 @@ const PROJECT_TABS: Tab[] = [
   { id: 'analysis',   label: 'Audit' },
   { id: 'comparison', label: 'Comparison' },
   { id: 'explorer',   label: 'Issues' },
+  { id: 'data-view',  label: 'DATA View' },
 ];
 
 const GLOBAL_TABS: Tab[] = [
@@ -141,9 +142,8 @@ export default function Header({ dbReady }: { dbReady: boolean }) {
               Reporting Settings
             </button>
             <button
-              disabled
-              title="Coming soon"
-              className="text-xs font-bold px-3 py-1.5 rounded border flex items-center gap-1.5 whitespace-nowrap bg-slate-800 border-slate-600 text-slate-500 cursor-not-allowed opacity-60"
+              onClick={() => { setScreen('data-view'); setToolbarOpen(false); }}
+              className="text-xs font-bold px-3 py-1.5 rounded border flex items-center gap-1.5 whitespace-nowrap bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 transition"
             >
               DATA View
             </button>

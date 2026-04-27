@@ -292,6 +292,7 @@ export type Screen =
   | 'analysis'
   | 'comparison'
   | 'explorer'
+  | 'data-view'
   | 'settings';
 
 export interface AppState {

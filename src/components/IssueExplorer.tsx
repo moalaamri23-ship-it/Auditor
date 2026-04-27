@@ -16,13 +16,28 @@ import { EMPTY_FILTERS } from '../types';
 import { TIMESTAMP_COLUMNS } from '../constants';
 import { useRunAutoRestore } from '../hooks/useRunAutoRestore';
 
-function fmtCell(col: string, value: unknown): string {
+function fmtCell(col: string, value: unknown, columnMap?: import('../types').ColumnMap): string {
   const raw = String(value ?? '');
   if (!raw) return '';
-  if ((TIMESTAMP_COLUMNS as readonly string[]).includes(col)) {
+  // Check if this raw column name maps to a canonical timestamp column
+  const isTimestamp = (() => {
+    if ((TIMESTAMP_COLUMNS as readonly string[]).includes(col)) return true;
+    if (columnMap) {
+      const canonical = Object.entries(columnMap).find(([, rawName]) => rawName === col)?.[0];
+      if (canonical && (TIMESTAMP_COLUMNS as readonly string[]).includes(canonical)) return true;
+    }
+    return false;
+  })();
+  if (isTimestamp) {
+    // Try parsing — DuckDB returns dates as ISO strings or Date objects
     const d = new Date(raw);
     if (!isNaN(d.getTime())) {
       return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+    }
+    // Fallback: already formatted as M/D/YYYY or similar — re-format to MM/DD/YYYY
+    const parts = raw.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+    if (parts) {
+      return `${parts[1].padStart(2, '0')}/${parts[2].padStart(2, '0')}/${parts[3]}`;
     }
   }
   return raw;
@@ -272,6 +287,7 @@ export default function IssueExplorer() {
             hasDB={!!run.hasDataInDB}
             search={search}
             onSearch={setSearch}
+            columnMap={run.columnMap}
           />
         )}
         {tab === 'rule-flags' && run.ruleChecks && (
@@ -320,6 +336,7 @@ function DataTab({
   hasDB,
   search,
   onSearch,
+  columnMap,
 }: {
   columns: string[];
   rows: Record<string, unknown>[];
@@ -327,6 +344,7 @@ function DataTab({
   hasDB: boolean;
   search: string;
   onSearch: (s: string) => void;
+  columnMap?: import('../types').ColumnMap;
 }) {
   if (!hasDB) {
     return (
@@ -375,9 +393,9 @@ function DataTab({
                     <td
                       key={col}
                       className="px-3 py-1.5 text-slate-700 border-r border-slate-100 font-mono max-w-[200px] truncate"
-                      title={fmtCell(col, row[col])}
+                      title={fmtCell(col, row[col], columnMap)}
                     >
-                      {fmtCell(col, row[col])}
+                      {fmtCell(col, row[col], columnMap)}
                     </td>
                   ))}
                 </tr>
