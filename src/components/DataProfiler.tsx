@@ -3,7 +3,7 @@ import Icon from './Icon';
 import FilterPanel from './FilterPanel';
 import { useActiveRun, useStore, useActiveProject } from '../store/useStore';
 import { runPipeline } from '../analysis/AnalysisEngine';
-import { getFilterOptions, failureCatalogStats } from '../services/DuckDBService';
+import { getFilterOptions, getCascadingFilterOptions, getLiveScopeCount, failureCatalogStats } from '../services/DuckDBService';
 import type {
   DataProfile, ColumnProfile, GranularityLevel, ValidationReport,
   AnalysisFilters, FilterOptions,
@@ -17,14 +17,34 @@ export default function DataProfiler() {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<AnalysisFilters>(run?.analysisFilters ?? EMPTY_FILTERS);
+  const [baseFilterOptions, setBaseFilterOptions] = useState<FilterOptions | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
+  const [liveScopeCount, setLiveScopeCount] = useState<number | null>(null);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
 
+  // Load base (unfiltered) options once when data is in DB
   useEffect(() => {
     if (!run?.hasDataInDB || !run.columnMap) return;
-    getFilterOptions(run.columnMap).then(setFilterOptions).catch(() => {});
+    getFilterOptions(run.columnMap).then((opts) => {
+      setBaseFilterOptions(opts);
+      setFilterOptions(opts);
+    }).catch(() => {});
     failureCatalogStats().then((s) => setCatalogLoaded(!!s && s.total > 0));
   }, [run?.hasDataInDB, run?.id]);
+
+  // Debounced: live count + cascading options on filter change
+  useEffect(() => {
+    if (!run?.hasDataInDB || !run.columnMap || !baseFilterOptions) return;
+    const t = setTimeout(async () => {
+      const [count, cascaded] = await Promise.all([
+        getLiveScopeCount(filters, run.columnMap, project),
+        getCascadingFilterOptions(filters, run.columnMap, project, baseFilterOptions),
+      ]);
+      setLiveScopeCount(count);
+      setFilterOptions(cascaded);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [filters, run?.hasDataInDB, run?.id, baseFilterOptions, project]);
 
   const handleRunRuleChecks = async () => {
     if (!run) return;
@@ -138,6 +158,7 @@ export default function DataProfiler() {
           options={filterOptions}
           columnMap={run.columnMap}
           totalWOs={profile.distinctWOs}
+          scopeWOs={liveScopeCount}
           onChange={setFilters}
         />
       )}

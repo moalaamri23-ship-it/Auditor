@@ -7,7 +7,7 @@ import Icon from './Icon';
 import FilterPanel from './FilterPanel';
 import { useActiveRun, useActiveProject, useStore, useRunsForProject } from '../store/useStore';
 import { runPipeline } from '../analysis/AnalysisEngine';
-import { getFilterOptions, failureCatalogStats, queryAIFlags, query } from '../services/DuckDBService';
+import { getFilterOptions, getCascadingFilterOptions, getLiveScopeCount, failureCatalogStats, queryAIFlags, query } from '../services/DuckDBService';
 import { RULE_CHECK_LABELS } from '../analysis/RuleChecksModule';
 import { FLAG_CATEGORY_LABELS } from '../analysis/AITextModule';
 import type {
@@ -27,7 +27,9 @@ export default function AuditDashboard() {
   const { setScreen, updateRun, aiConfig } = useStore();
 
   const [filters, setFilters] = useState<AnalysisFilters>(run?.analysisFilters ?? EMPTY_FILTERS);
+  const [baseFilterOptions, setBaseFilterOptions] = useState<FilterOptions | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
+  const [liveScopeCount, setLiveScopeCount] = useState<number | null>(null);
   const [isRerunning, setIsRerunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [topEquipment, setTopEquipment] = useState<Array<{ equipment: string; count: number }>>([]);
@@ -47,10 +49,28 @@ export default function AuditDashboard() {
     if (run?.analysisFilters) setFilters(run.analysisFilters);
   }, [run?.id]);
 
+  // Load base (unfiltered) options once when data is in DB
   useEffect(() => {
     if (!run?.hasDataInDB || !run.columnMap) return;
-    getFilterOptions(run.columnMap).then(setFilterOptions).catch(() => {});
+    getFilterOptions(run.columnMap).then((opts) => {
+      setBaseFilterOptions(opts);
+      setFilterOptions(opts);
+    }).catch(() => {});
   }, [run?.hasDataInDB, run?.id]);
+
+  // Debounced: update live count + cascading options whenever filters change
+  useEffect(() => {
+    if (!run?.hasDataInDB || !run.columnMap || !baseFilterOptions) return;
+    const t = setTimeout(async () => {
+      const [count, cascaded] = await Promise.all([
+        getLiveScopeCount(filters, run.columnMap, project),
+        getCascadingFilterOptions(filters, run.columnMap, project, baseFilterOptions),
+      ]);
+      setLiveScopeCount(count);
+      setFilterOptions(cascaded);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [filters, run?.hasDataInDB, run?.id, baseFilterOptions, project]);
 
   useEffect(() => {
     if (!run?.hasDataInDB) return;
@@ -249,7 +269,7 @@ export default function AuditDashboard() {
           options={filterOptions}
           columnMap={run.columnMap}
           totalWOs={run.dataProfile?.distinctWOs ?? 0}
-          scopeWOs={run.ruleChecks.totalWOs}
+          scopeWOs={liveScopeCount ?? run.ruleChecks.totalWOs}
           onChange={setFilters}
         />
       )}

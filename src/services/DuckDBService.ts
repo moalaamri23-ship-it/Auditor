@@ -494,6 +494,125 @@ export async function getFilterOptions(columnMap: ColumnMap): Promise<FilterOpti
   return { workCenter, functionalLocation, failureCatalog, equipment, dateMin, dateMax };
 }
 
+// ─── Shared filter-condition builder ────────────────────────────────────────
+
+type FilterDim = 'workCenter' | 'functionalLocation' | 'failureCatalog' | 'equipment' | 'date';
+
+function _buildFilterConditions(
+  filters: AnalysisFilters,
+  columnMap: ColumnMap,
+  project: AuditProject | null,
+  excludeDim?: FilterDim,
+): string[] {
+  const conditions: string[] = [];
+  const has = (col: string) => !!columnMap[col as keyof ColumnMap];
+
+  if (project?.type === 'SINGLE_BANK' && project.bankPattern && has('functional_location')) {
+    const pattern = project.bankPattern.replace(/\*/g, '%').replace(/'/g, "''");
+    conditions.push(`functional_location LIKE '${pattern}'`);
+  }
+
+  if (excludeDim !== 'date' && has('notification_date')) {
+    if (filters.dateFrom) conditions.push(`notification_date >= '${filters.dateFrom}'::DATE`);
+    if (filters.dateTo)   conditions.push(`notification_date <= '${filters.dateTo}'::DATE`);
+  }
+
+  const inList = (col: string, dim: FilterDim, vals: string[]) => {
+    if (dim === excludeDim || !has(col) || vals.length === 0) return;
+    const escaped = vals.map((v) => `'${v.replace(/'/g, "''")}'`).join(', ');
+    conditions.push(`${col} IN (${escaped})`);
+  };
+
+  inList('work_center',          'workCenter',         filters.workCenter);
+  inList('functional_location',  'functionalLocation', filters.functionalLocation);
+  inList('failure_catalog_desc', 'failureCatalog',     filters.failureCatalog);
+
+  if (excludeDim !== 'equipment' && filters.equipment.length > 0) {
+    const equipCol = has('equipment_description') ? 'equipment_description'
+      : has('equipment') ? 'equipment' : null;
+    if (equipCol) {
+      const escaped = filters.equipment.map((v) => `'${v.replace(/'/g, "''")}'`).join(', ');
+      conditions.push(`${equipCol} IN (${escaped})`);
+    }
+  }
+
+  return conditions;
+}
+
+/**
+ * Lightweight WO count for the current filter selection — does NOT mutate any view.
+ * Use this to show a live scope count as the user changes filters.
+ */
+export async function getLiveScopeCount(
+  filters: AnalysisFilters,
+  columnMap: ColumnMap,
+  project: AuditProject | null,
+): Promise<number> {
+  if (!_conn) return 0;
+  try {
+    const conds = _buildFilterConditions(filters, columnMap, project);
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+    const [row] = await _q(`SELECT COUNT(*) AS cnt FROM v_wo_primary ${where}`);
+    return Number(row?.cnt ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Returns filter options where each dimension is narrowed by all OTHER active
+ * filters (faceted / cascading behaviour). dateMin/dateMax come from the
+ * provided `baseOptions` and are never recalculated.
+ */
+export async function getCascadingFilterOptions(
+  filters: AnalysisFilters,
+  columnMap: ColumnMap,
+  project: AuditProject | null,
+  baseOptions: FilterOptions,
+): Promise<FilterOptions> {
+  if (!_conn) return baseOptions;
+
+  const distinctFrom = async (col: string, dim: FilterDim): Promise<string[]> => {
+    if (!columnMap[col as keyof ColumnMap]) return [];
+    try {
+      const conds = [
+        ..._buildFilterConditions(filters, columnMap, project, dim),
+        `${col} IS NOT NULL`,
+        `TRIM(CAST(${col} AS VARCHAR)) <> ''`,
+      ];
+      const rows = await _q(`
+        SELECT DISTINCT CAST(${col} AS VARCHAR) AS v
+        FROM v_wo_primary
+        WHERE ${conds.join(' AND ')}
+        ORDER BY v LIMIT 500
+      `);
+      return rows.map((r) => String(r.v ?? ''));
+    } catch {
+      return [];
+    }
+  };
+
+  const equipCol = columnMap.equipment_description ? 'equipment_description' : 'equipment';
+
+  const [workCenter, functionalLocation, failureCatalog, equipment] = await Promise.all([
+    distinctFrom('work_center',          'workCenter'),
+    distinctFrom('functional_location',  'functionalLocation'),
+    distinctFrom('failure_catalog_desc', 'failureCatalog'),
+    (columnMap.equipment_description || columnMap.equipment)
+      ? distinctFrom(equipCol, 'equipment')
+      : Promise.resolve([] as string[]),
+  ]);
+
+  return {
+    workCenter,
+    functionalLocation,
+    failureCatalog,
+    equipment,
+    dateMin: baseOptions.dateMin,
+    dateMax: baseOptions.dateMax,
+  };
+}
+
 /**
  * Builds `v_analysis_scope`: filtered subset of `v_wo_primary`. Applies the
  * project's bank pattern (when `SINGLE_BANK`) plus user-selected filters.
@@ -505,34 +624,7 @@ export async function createAnalysisScopeView(
 ): Promise<number> {
   if (!_conn) throw new Error('Database is not initialised.');
 
-  const conditions: string[] = [];
-  const has = (col: string) => !!columnMap[col as keyof ColumnMap];
-
-  if (project?.type === 'SINGLE_BANK' && project.bankPattern && has('functional_location')) {
-    const pattern = project.bankPattern.replace(/\*/g, '%').replace(/'/g, "''");
-    conditions.push(`functional_location LIKE '${pattern}'`);
-  }
-
-  if (has('notification_date')) {
-    if (filters.dateFrom) conditions.push(`notification_date >= '${filters.dateFrom}'::DATE`);
-    if (filters.dateTo) conditions.push(`notification_date <= '${filters.dateTo}'::DATE`);
-  }
-
-  const inList = (col: string, vals: string[]) => {
-    if (!has(col) || vals.length === 0) return;
-    const escaped = vals.map((v) => `'${v.replace(/'/g, "''")}'`).join(', ');
-    conditions.push(`${col} IN (${escaped})`);
-  };
-
-  inList('work_center', filters.workCenter);
-  inList('functional_location', filters.functionalLocation);
-  inList('failure_catalog_desc', filters.failureCatalog);
-  // Equipment filter: prefer equipment_description if mapped, fall back to equipment
-  if (filters.equipment.length > 0) {
-    const equipCol = has('equipment_description') ? 'equipment_description' : has('equipment') ? 'equipment' : null;
-    if (equipCol) inList(equipCol, filters.equipment);
-  }
-
+  const conditions = _buildFilterConditions(filters, columnMap, project);
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   await _conn.query(`
     CREATE OR REPLACE VIEW v_analysis_scope AS
