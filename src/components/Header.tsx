@@ -10,11 +10,9 @@ interface Tab {
 
 const PROJECT_TABS: Tab[] = [
   { id: 'profiler',   label: 'Data' },
-  { id: 'pre-checks', label: 'Pre-Checks' },
   { id: 'analysis',   label: 'Audit' },
   { id: 'comparison', label: 'Comparison' },
   { id: 'explorer',   label: 'Issues' },
-  { id: 'data-view',  label: 'DATA View' },
 ];
 
 const GLOBAL_TABS: Tab[] = [
