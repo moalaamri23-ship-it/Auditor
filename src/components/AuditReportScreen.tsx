@@ -36,6 +36,7 @@ interface WorkCenterAuditData {
   aiFlagsCount: number;
   ruleDistribution: Record<string, number>;
   aiDistribution: Record<string, number>;
+  woNumbers: string[];
 }
 
 // ── Standalone WC loader (mirrors ReportingSettingsScreen logic) ─────────────
@@ -84,9 +85,8 @@ async function loadWorkCenters(
   const rows = await query(sql);
 
   return rows.map(r => {
-    const woSet = new Set(
-      String(r.wo_list ?? '').split('|').filter(Boolean)
-    );
+    const woNumbers = String(r.wo_list ?? '').split('|').filter(Boolean);
+    const woSet = new Set(woNumbers);
 
     // Rule distribution: count flagged WOs per rule check ID
     const ruleDistribution: Record<string, number> = {};
@@ -118,6 +118,7 @@ async function loadWorkCenters(
       aiFlagsCount:     aiFlaggedWOs.size,
       ruleDistribution,
       aiDistribution,
+      woNumbers,
     };
   });
 }
@@ -309,6 +310,99 @@ export default function AuditReportScreen() {
     ].join('\n');
   };
 
+  const buildDashboardPayload = (wc: WorkCenterAuditData) => {
+    const woSet = new Set(wc.woNumbers);
+
+    const wcAIFlags  = (run?.aiFlags ?? []).filter(f => woSet.has(f.woNumber));
+    const wcRuleWOs  = (run?.ruleChecks?.flaggedWOs ?? []).filter(fw => woSet.has(fw.wo));
+
+    const aiFlaggedSet   = new Set(wcAIFlags.map(f => f.woNumber));
+    const ruleFlaggedSet = new Set(wcRuleWOs.map(fw => fw.wo));
+    const allFlaggedSet  = new Set([...aiFlaggedSet, ...ruleFlaggedSet]);
+    const totalAIFlags   = wcAIFlags.length;
+    const cleanWOs       = wc.totalWOs - allFlaggedSet.size;
+
+    const RULE_KEYS = [
+      'missing_confirmation', 'not_listed_codes', 'missing_scoping_text',
+    ] as const;
+    const AI_KEYS = [
+      'desc_code_conflict', 'false_not_listed', 'desc_confirmation_mismatch',
+      'desc_code_confirmation_misalign', 'generic_description', 'generic_confirmation',
+    ] as const;
+
+    const errorDistribution = [
+      ...RULE_KEYS.map(key => ({ key, label: RULE_LABELS[key], value: wc.ruleDistribution[key] ?? 0, type: 'Rule' })),
+      ...AI_KEYS.map(key  => ({ key, label: AI_LABELS[key],   value: wc.aiDistribution[key]  ?? 0, type: 'AI'   })),
+    ];
+
+    const overallQuality = {
+      valid:         cleanWOs,
+      entryQuality:  aiFlaggedSet.size,
+      missingFields: [...ruleFlaggedSet].filter(wo => !aiFlaggedSet.has(wo)).length,
+      total:         wc.totalWOs,
+    };
+
+    // Top equipment derived from AI flags (equipment field on each flag)
+    const equipCounts = new Map<string, number>();
+    for (const flag of wcAIFlags) {
+      if (flag.equipment) equipCounts.set(flag.equipment, (equipCounts.get(flag.equipment) ?? 0) + 1);
+    }
+    const topEquipment = [...equipCounts.entries()]
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([equipment, count]) => ({ equipment, count }));
+
+    const issues = [...allFlaggedSet].map(woNumber => {
+      const flagsForWO = wcAIFlags.filter(f => f.woNumber === woNumber);
+      const ruleEntry  = wcRuleWOs.find(fw => fw.wo === woNumber);
+      const ref        = flagsForWO[0];
+      return {
+        woNumber,
+        equipment:   ref?.equipment   ?? '',
+        workCenter:  wc.workCenter,
+        description: ref?.description ?? '',
+        codes:       ref?.codes       ?? '',
+        ruleFlags:   ruleEntry?.checks ?? [],
+        aiFlags: flagsForWO.map(f => ({
+          category:      f.category,
+          severity:      f.severity,
+          comment:       f.comment,
+          rowSeq:        f.rowSeq ?? null,
+          operationDesc: f.operationDesc ?? '',
+          closure:       f.closure ?? '',
+        })),
+      };
+    });
+
+    return {
+      project: {
+        name:   project?.name   ?? '',
+        type:   project?.type   ?? 'TOTAL',
+        period: project?.period ?? '',
+      },
+      run: {
+        runIndex:        run?.runIndex ?? 1,
+        periodLabel:     run?.periodLabel ?? '',
+        fileName:        run?.fileName ?? '',
+        lastAnalysedAt:  run?.lastAnalysedAt ?? '',
+        analysisFilters: { ...filters, workCenter: [wc.workCenter] },
+      },
+      kpi: {
+        totalWOs:       wc.totalWOs,
+        ruleFlaggedWOs: wc.ruleFlagsCount,
+        aiFlaggedWOs:   wc.aiFlagsCount,
+        totalAIFlags,
+        cleanWOs,
+      },
+      errorDistribution,
+      codeQuality:   null, // requires per-WC DuckDB query — to be added with schema
+      overallQuality,
+      perWorkCenter: [{ workCenter: wc.workCenter, total: wc.totalWOs, flagged: allFlaggedSet.size }],
+      topEquipment,
+      issues,
+    };
+  };
+
   const sendEmail = async (wc: WorkCenterAuditData) => {
     if (!aiConfig.reportingWebhookUrl) {
       alert('Please configure Reporting Integration URL in Settings first.');
@@ -326,6 +420,7 @@ export default function AuditReportScreen() {
           emailTo,
           subject: `Reliability Audit Report — ${wc.description || wc.workCenter}`,
           emailBody: getEmailText(wc),
+          dashboardJson: JSON.stringify(buildDashboardPayload(wc)),
         }),
       });
       setSendingStatus(prev => ({ ...prev, [wc.workCenter]: res.ok ? 'success' : 'error' }));
