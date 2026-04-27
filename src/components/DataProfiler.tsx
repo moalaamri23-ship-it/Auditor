@@ -351,12 +351,6 @@ function ColumnHealthRow({ col }: { col: ColumnProfile }) {
     number: 'bg-orange-100 text-orange-700',
     unknown: 'bg-slate-100 text-slate-500',
   };
-  const CONF_BADGE: Record<string, string> = {
-    HIGH: 'bg-green-100 text-green-700',
-    MEDIUM: 'bg-amber-100 text-amber-700',
-    LOW: 'bg-red-100 text-red-700',
-    UNMAPPED: 'bg-slate-100 text-slate-500',
-  };
   const nullColor =
     col.nullPct > 50
       ? 'bg-red-400'
@@ -373,14 +367,9 @@ function ColumnHealthRow({ col }: { col: ColumnProfile }) {
       </td>
       <td>
         {col.canonicalName ? (
-          <div>
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${CONF_BADGE[col.mappingConfidence]}`}>
-              {col.mappingConfidence}
-            </span>
-            <div className="font-mono text-[10px] text-slate-500 mt-0.5">{col.canonicalName}</div>
-          </div>
+          <span className="font-mono text-[10px] text-slate-600">{col.canonicalName}</span>
         ) : (
-          <span className="text-[10px] text-slate-400">Unmapped</span>
+          <span className="text-[10px] text-slate-400">—</span>
         )}
       </td>
       <td>
