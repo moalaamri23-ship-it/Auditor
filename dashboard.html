@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audit Results</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Colour tokens (exact app values) ─────────────────────────────── */
+    :root {
+      --sl-50:  #f8fafc; --sl-100: #f1f5f9; --sl-200: #e2e8f0;
+      --sl-300: #cbd5e1; --sl-400: #94a3b8; --sl-500: #64748b;
+      --sl-600: #475569; --sl-700: #334155; --sl-800: #1e293b;
+      --sl-900: #0f172a;
+      --brand:  #3b82f6;
+      --amber-50: #fffbeb; --amber-100: #fef3c7; --amber-500: #f59e0b;
+      --amber-600: #d97706; --amber-700: #b45309;
+      --indigo-50: #eef2ff; --indigo-100: #e0e7ff; --indigo-500: #6366f1;
+      --indigo-600: #4f46e5; --indigo-700: #4338ca;
+      --violet-600: #7c3aed;
+      --green-50: #f0fdf4; --green-500: #22c55e; --green-600: #16a34a;
+      --red-50: #fef2f2;   --red-400: #f87171;   --red-500: #ef4444;
+      --rule-color: #f59e0b;  /* amber */
+      --ai-color:   #6366f1;  /* indigo */
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--sl-50);
+      color: var(--sl-800);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; }
+
+    /* ── Animations ────────────────────────────────────────────────────── */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-enter { animation: fadeIn 0.3s ease-out forwards; }
+
+    /* ── Report stamp (tiny, top of page) ─────────────────────────────── */
+    .report-stamp {
+      background: var(--sl-900);
+      color: var(--sl-400);
+      font-size: 11px;
+      padding: 6px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .report-stamp span { color: var(--sl-200); font-weight: 600; }
+
+    /* ── Page layout ───────────────────────────────────────────────────── */
+    .page { max-width: 1280px; margin: 0 auto; padding: 24px; }
+
+    /* ── Page heading row ──────────────────────────────────────────────── */
+    .page-heading {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .page-heading h1 { font-size: 30px; font-weight: 700; color: var(--sl-900); line-height: 1.1; }
+    .page-heading .meta { font-size: 14px; color: var(--sl-500); margin-top: 4px; }
+    .heading-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 4px; border: 1px solid var(--sl-200);
+      background: #fff; color: var(--sl-700);
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      font-family: inherit;
+    }
+    .btn:hover:not(:disabled) { border-color: #93c5fd; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn.btn-active { background: var(--sl-900); color: #fff; border-color: var(--sl-900); }
+    .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    /* ── Section spacing ───────────────────────────────────────────────── */
+    .space-y > * + * { margin-top: 24px; }
+
+    /* ── Card ──────────────────────────────────────────────────────────── */
+    .card {
+      background: #fff;
+      border: 1px solid var(--sl-200);
+      border-radius: 4px;
+      padding: 16px;
+      box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05);
+    }
+    .card-title { font-size: 14px; font-weight: 700; color: var(--sl-700); }
+    .card-sub   { font-size: 12px; color: var(--sl-400); margin-top: 2px; }
+    .card-body  { margin-top: 16px; }
+
+    /* ── KPI Grid ──────────────────────────────────────────────────────── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .kpi-card {
+      background: #fff; border: 1px solid var(--sl-200); border-radius: 4px;
+      padding: 16px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05);
+    }
+    .kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--sl-400); letter-spacing: 0.04em; }
+    .kpi-value { font-size: 30px; font-weight: 700; margin-top: 4px; line-height: 1; }
+    .kpi-value.amber  { color: var(--amber-600); }
+    .kpi-value.indigo { color: var(--indigo-600); }
+    .kpi-value.violet { color: var(--violet-600); }
+    .kpi-value.green  { color: var(--green-600); }
+
+    /* ── Two-col grid ──────────────────────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+    /* ── Error Distribution ────────────────────────────────────────────── */
+    .ed-section {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--sl-400);
+      margin: 12px 0 6px;
+    }
+    .ed-section:first-child { margin-top: 0; }
+    .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .bar-row-label {
+      width: 160px; flex-shrink: 0;
+      font-size: 10px; color: var(--sl-600); text-align: right;
+      line-height: 1.3;
+    }
+    .bar-track { flex: 1; height: 16px; background: var(--sl-100); border-radius: 3px; overflow: hidden; }
+    .bar-fill  { height: 100%; border-radius: 3px; min-width: 2px; }
+    .bar-count { width: 36px; text-align: right; font-size: 11px; font-weight: 700; color: var(--sl-600); }
+
+    /* ── Donut chart ───────────────────────────────────────────────────── */
+    .donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    .donut-svg-box { position: relative; }
+    .donut-svg-box svg { display: block; }
+    .donut-legend { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+    .legend-row   { display: flex; align-items: center; justify-content: space-between; }
+    .legend-left  { display: flex; align-items: center; gap: 7px; }
+    .legend-dot   { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .legend-name  { font-size: 11px; color: var(--sl-600); }
+    .legend-right { display: flex; align-items: center; gap: 8px; }
+    .legend-pct   { font-size: 10px; color: var(--sl-400); }
+    .legend-val   { font-size: 12px; font-weight: 700; color: var(--sl-700); }
+
+    /* ── Per Work Center ───────────────────────────────────────────────── */
+    .wc-scroll { overflow-x: auto; }
+
+    /* ── Top Equipment ─────────────────────────────────────────────────── */
+    .eq-list { display: flex; flex-direction: column; gap: 6px; }
+    .eq-row {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 3px 4px; border-radius: 4px;
+    }
+    .eq-rank  { font-size: 11px; font-weight: 600; color: var(--sl-400); width: 20px; text-align: right; flex-shrink: 0; padding-top: 1px; }
+    .eq-body  { flex: 1; min-width: 0; }
+    .eq-name  { font-size: 12px; color: var(--sl-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .eq-bar-track { height: 4px; background: var(--sl-100); border-radius: 9999px; overflow: hidden; margin-top: 5px; }
+    .eq-bar-fill  { height: 100%; background: var(--indigo-500); border-radius: 9999px; }
+    .eq-count { font-size: 12px; font-weight: 700; color: var(--sl-700); flex-shrink: 0; width: 32px; text-align: right; padding-top: 1px; }
+
+    /* ── Issues view ───────────────────────────────────────────────────── */
+    .back-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .issues-tabs { display: flex; gap: 2px; margin-bottom: 16px; border-bottom: 1px solid var(--sl-200); }
+    .tab-btn {
+      padding: 7px 16px; border: none; background: none; cursor: pointer;
+      font-size: 13px; font-weight: 600; color: var(--sl-500); border-bottom: 2px solid transparent;
+      margin-bottom: -1px; font-family: inherit; transition: color 0.12s;
+    }
+    .tab-btn.active { color: var(--sl-900); border-bottom-color: var(--sl-900); }
+
+    /* Shared issue card */
+    .issue-card { border: 1px solid var(--sl-200); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+    .issue-card-hdr {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; background: #fff; cursor: pointer;
+    }
+    .issue-card-hdr:hover { background: var(--sl-50); }
+    .issue-wo { font-size: 12px; font-weight: 700; color: var(--sl-800); width: 100px; flex-shrink: 0; }
+    .issue-equip { font-size: 12px; color: var(--sl-500); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .issue-badges { display: flex; gap: 4px; flex-wrap: wrap; flex-shrink: 0; align-items: center; }
+    .issue-caret  { font-size: 10px; color: var(--sl-300); flex-shrink: 0; }
+    .issue-detail { padding: 12px 14px; background: var(--sl-50); border-top: 1px solid var(--sl-200); display: none; }
+    .issue-detail.open { display: block; }
+
+    /* Detail sections */
+    .detail-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--sl-400); margin-bottom: 6px; }
+    .detail-field { display: flex; gap: 8px; margin-bottom: 4px; font-size: 12px; }
+    .detail-field-key { color: var(--sl-400); flex-shrink: 0; width: 90px; }
+    .detail-field-val { color: var(--sl-700); }
+    .detail-field-val.amber { color: var(--amber-700); }
+
+    /* AI flag entry */
+    .ai-entry {
+      background: var(--indigo-50); border: 1px solid var(--indigo-100);
+      border-left: 3px solid var(--indigo-500); border-radius: 4px;
+      padding: 10px 12px; margin-bottom: 6px;
+    }
+    .ai-entry-hdr { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; align-items: center; }
+    .ai-comment { font-size: 12px; color: var(--sl-700); line-height: 1.5; }
+    .ai-meta    { font-size: 11px; color: var(--sl-500); margin-top: 5px; }
+
+    /* ── Badges ────────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; border-radius: 9999px;
+      font-size: 10px; font-weight: 700; white-space: nowrap;
+    }
+    .badge.amber  { background: var(--amber-100);  color: var(--amber-700);  }
+    .badge.indigo { background: var(--indigo-100); color: var(--indigo-700); }
+    .badge.red    { background: var(--red-50);     color: var(--red-500);    }
+    .badge.slate  { background: var(--sl-100);     color: var(--sl-600);     }
+    .badge.green  { background: var(--green-50);   color: var(--green-600);  }
+
+    /* ── Empty / no-data ───────────────────────────────────────────────── */
+    .empty { font-size: 12px; color: var(--sl-400); font-style: italic; padding: 48px 0; text-align: center; }
+
+    /* ── Responsive ────────────────────────────────────────────────────── */
+    @media (max-width: 860px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .bar-row-label { width: 120px; }
+    }
+    @media (max-width: 520px) {
+      .kpi-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .page { padding: 16px; }
+      .page-heading { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  DATA INJECTION POINT — Power Automate: replace the JSON inside this
+  <script> tag. Everything else in this file is read-only template HTML.
+  ═══════════════════════════════════════════════════════════════════════════ -->
+<script id="audit-data" type="application/json">
+{
+  "project": { "name": "Pump Station Alpha", "type": "TOTAL", "period": "QUARTERLY" },
+  "run": {
+    "runIndex": 3,
+    "periodLabel": "2026-Q1",
+    "fileName": "PM_Export_2026_Q1.xlsx",
+    "lastAnalysedAt": "2026-04-28T09:15:00Z",
+    "analysisFilters": {
+      "dateFrom": "2026-01-01", "dateTo": "2026-03-31",
+      "workCenter": ["MECH-01", "ELEC-02"],
+      "functionalLocation": [], "failureCatalog": [], "equipment": []
+    }
+  },
+  "kpi": {
+    "totalWOs": 412, "ruleFlaggedWOs": 21,
+    "aiFlaggedWOs": 15, "totalAIFlags": 16, "cleanWOs": 8
+  },
+  "errorDistribution": [
+    { "key": "not_listed_codes",                "label": "\"Not Listed\" Codes",              "value": 29, "type": "Rule" },
+    { "key": "missing_scoping_text",            "label": "Missing Scoping Text",              "value": 15, "type": "Rule" },
+    { "key": "missing_confirmation",            "label": "Missing Confirmation",              "value": 34, "type": "Rule" },
+    { "key": "desc_code_conflict",              "label": "Desc — Code Conflict",         "value": 18, "type": "AI" },
+    { "key": "desc_confirmation_mismatch",      "label": "Desc — Confirmation Mismatch", "value": 22, "type": "AI" },
+    { "key": "generic_description",             "label": "Generic Description",               "value": 5,  "type": "AI" },
+    { "key": "generic_confirmation",            "label": "Generic Confirmation",              "value": 8,  "type": "AI" }
+  ],
+  "codeQuality": { "valid": 298, "notListed": 62, "invalidHierarchy": 0, "missing": 0 },
+  "overallQuality": { "valid": 312, "entryQuality": 54, "missingFields": 46, "total": 412 },
+  "perWorkCenter": [
+    { "workCenter": "MAKMCG2", "total": 6,  "flagged": 4 },
+    { "workCenter": "MAMMAT0", "total": 9,  "flagged": 5 },
+    { "workCenter": "MAKMCG1", "total": 8,  "flagged": 3 },
+    { "workCenter": "MAMCGD1", "total": 7,  "flagged": 2 },
+    { "workCenter": "MAMCL82", "total": 5,  "flagged": 1 }
+  ],
+  "topEquipment": [
+    { "equipment": "ACTION PMP 6B-P-00177 (C15-HL 225M)", "count": 1 },
+    { "equipment": "ACTION PMP 6B-P-00165 (CV-HL 130M)", "count": 1 },
+    { "equipment": "NEW OFFICE BLDNG IN ERL THRML",       "count": 1 },
+    { "equipment": "ACTION PMP 62-P-011238 (PMK-CD 160M)","count": 1 },
+    { "equipment": "64K0U001A AIR COMPRSH A",              "count": 1 },
+    { "equipment": "ACTION PMP 6B-P-00183 (C-HL 160M)",   "count": 1 },
+    { "equipment": "AREA LIGHTING DB TO 62-DB-DS Y01",    "count": 1 },
+    { "equipment": "62P10801A SLDG PMP",                  "count": 1 },
+    { "equipment": "OUTDOOR CAMERA CAMP PARKING CAM1",    "count": 1 },
+    { "equipment": "OXY-LT16 PORTABLE LIGHT TOWER",       "count": 1 }
+  ],
+  "issues": [
+    {
+      "woNumber": "WO-100045", "equipment": "ACTION PMP 6B-P-00177", "workCenter": "MECH-01",
+      "description": "Pump vibration high — bearing area",
+      "codes": "Part: Impeller | Damage: Erosion | Cause: Cavitation",
+      "ruleFlags": ["missing_confirmation"],
+      "aiFlags": []
+    },
+    {
+      "woNumber": "WO-100089", "equipment": "ACTION PMP 6B-P-00165", "workCenter": "MECH-01",
+      "description": "Routine check",
+      "codes": "Part: Not Listed | Damage: Not Listed | Cause: Not Listed",
+      "ruleFlags": ["not_listed_codes"],
+      "aiFlags": [
+        {
+          "category": "generic_description", "severity": "MEDIUM",
+          "comment": "Description 'Routine check' is present but too vague to identify the failure mode or scope of work performed. A description should specify what was checked, what condition was found, and what action was taken.",
+          "rowSeq": null, "operationDesc": "Inspect and lubricate", "closure": "Checked OK"
+        }
+      ]
+    },
+    {
+      "woNumber": "WO-100112", "equipment": "64K0U001A AIR COMPRSH A", "workCenter": "ELEC-02",
+      "description": "Electrical fault in control circuit board",
+      "codes": "Part: Tube Bundle | Damage: Fouling | Cause: Process",
+      "ruleFlags": [],
+      "aiFlags": [
+        {
+          "category": "desc_code_conflict", "severity": "HIGH",
+          "comment": "The work order description references an electrical fault in a control circuit, but the failure codes describe mechanical tube fouling caused by a process condition. These describe entirely different failure modes.",
+          "rowSeq": null, "operationDesc": "Inspect and clean tube bundle", "closure": "Flushed bundle, confirmed clean"
+        }
+      ]
+    }
+  ]
+}
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ LAYOUT -->
+
+<!-- Top stamp -->
+<div class="report-stamp">
+  <span id="stamp-left">SAP Reliability Auditor — Exported Report</span>
+  <span id="stamp-right">—</span>
+</div>
+
+<div class="page">
+
+  <!-- Page heading -->
+  <div class="page-heading">
+    <div>
+      <h1>Audit Results</h1>
+      <div class="meta" id="page-meta">—</div>
+    </div>
+    <div class="heading-actions">
+      <button class="btn" disabled>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7">
+          <rect x="1" y="2" width="6" height="12" rx="1"/>
+          <rect x="9" y="2" width="6" height="12" rx="1"/>
+        </svg>
+        Comparison Mode
+      </button>
+      <button class="btn" id="btn-issues" onclick="showIssues()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7">
+          <path d="M2 4h12M2 8h8M2 12h5"/>
+        </svg>
+        Open Issues
+      </button>
+    </div>
+  </div>
+
+  <!-- ── DASHBOARD VIEW ──────────────────────────────────────────────────── -->
+  <div id="dashboard-view" class="space-y animate-enter">
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpi-grid"></div>
+
+    <!-- Error Distribution -->
+    <div class="card animate-enter">
+      <div class="card-title">Error Distribution</div>
+      <div class="card-sub">Counts per category — both rule-based and AI-detected</div>
+      <div class="card-body" id="chart-ed"></div>
+    </div>
+
+    <!-- Code Quality + Overall Quality -->
+    <div class="grid-2">
+      <div class="card animate-enter">
+        <div class="card-title">Code Quality Breakdown</div>
+        <div class="card-sub">State of the Object/Damage/Cause description fields</div>
+        <div class="card-body">
+          <div class="donut-wrap" id="chart-cq"></div>
+        </div>
+      </div>
+      <div class="card animate-enter">
+        <div class="card-title">Overall Quality</div>
+        <div class="card-sub">WOs by flag status — Valid, text quality, or missing fields</div>
+        <div class="card-body">
+          <div class="donut-wrap" id="chart-oq"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Per Work Center + Top Equipment -->
+    <div class="grid-2">
+      <div class="card animate-enter">
+        <div class="card-title">Per Work Center</div>
+        <div class="card-sub">Total WOs vs flagged</div>
+        <div class="card-body">
+          <div class="wc-scroll" id="chart-wc"></div>
+        </div>
+      </div>
+      <div class="card animate-enter">
+        <div class="card-title">Top Problem Equipment</div>
+        <div class="card-sub">Equipment with the most flags — AI and rule-based combined</div>
+        <div class="card-body">
+          <div class="eq-list" id="chart-eq"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /dashboard-view -->
+
+  <!-- ── ISSUES VIEW ─────────────────────────────────────────────────────── -->
+  <div id="issues-view" style="display:none" class="animate-enter">
+
+    <div class="back-row">
+      <button class="btn" onclick="showDashboard()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 12L6 8l4-4"/>
+        </svg>
+        Back to Dashboard
+      </button>
+      <span style="font-size:13px;color:var(--sl-400)" id="issues-count-label"></span>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="issues-tabs">
+      <button class="tab-btn active" id="tab-rule" onclick="switchTab('rule')">Rule Flags</button>
+      <button class="tab-btn" id="tab-ai"   onclick="switchTab('ai')">AI Flags</button>
+    </div>
+
+    <!-- Rule Flags Tab -->
+    <div id="tab-rule-content"></div>
+    <!-- AI Flags Tab -->
+    <div id="tab-ai-content" style="display:none"></div>
+
+  </div><!-- /issues-view -->
+
+</div><!-- /page -->
+
+<!-- ═══════════════════════════════════════════════════════════════════════ SCRIPT -->
+<script>
+/* ── Helpers ──────────────────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmt = n => (n == null ? 0 : n).toLocaleString();
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
+  catch { return iso; }
+}
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+  catch { return iso; }
+}
+
+/* ── View / tab switching ─────────────────────────────────────────────────── */
+function showIssues() {
+  $('dashboard-view').style.display = 'none';
+  $('issues-view').style.display = '';
+  $('btn-issues').classList.add('btn-active');
+}
+function showDashboard() {
+  $('dashboard-view').style.display = '';
+  $('issues-view').style.display = 'none';
+  $('btn-issues').classList.remove('btn-active');
+}
+function switchTab(tab) {
+  $('tab-rule-content').style.display = tab === 'rule' ? '' : 'none';
+  $('tab-ai-content').style.display   = tab === 'ai'   ? '' : 'none';
+  $('tab-rule').classList.toggle('active', tab === 'rule');
+  $('tab-ai').classList.toggle('active',   tab === 'ai');
+}
+
+/* ── Badge helpers ────────────────────────────────────────────────────────── */
+const RULE_LABELS = {
+  missing_confirmation: 'Missing Confirmation',
+  not_listed_codes:     '"Not Listed" Codes',
+  missing_scoping_text: 'Missing Scoping Text',
+};
+const AI_LABELS = {
+  desc_code_conflict:              'Desc–Code Conflict',
+  false_not_listed:                'False Not Listed',
+  desc_confirmation_mismatch:      'Desc–Conf Mismatch',
+  desc_code_confirmation_misalign: 'Three-Way Misalignment',
+  generic_description:             'Generic Description',
+  generic_confirmation:            'Generic Confirmation',
+};
+const ruleBadge = r   => `<span class="badge amber">${esc(RULE_LABELS[r] || r)}</span>`;
+const aiBadge   = cat => `<span class="badge indigo">${esc(AI_LABELS[cat] || cat)}</span>`;
+const sevBadge  = sev => {
+  const cls = sev === 'HIGH' ? 'red' : sev === 'MEDIUM' ? 'amber' : 'slate';
+  return `<span class="badge ${cls}">${esc(sev)}</span>`;
+};
+
+/* ── Toggle issue detail ──────────────────────────────────────────────────── */
+function toggleIssue(id) {
+  const d = $(id + '-detail');
+  const c = $(id + '-caret');
+  if (!d) return;
+  const open = d.classList.toggle('open');
+  if (c) c.textContent = open ? '▲' : '▼';
+}
+
+/* ── SVG Donut (stroke-dasharray technique) ───────────────────────────────── */
+// Donut dimensions matching Recharts innerRadius=60, outerRadius=90 in a ~260px container.
+// We use a 220×220 viewBox; r=75 (midpoint), sw=30 (ring width).
+// Each <circle> is stacked in a <g transform="rotate(-90 110 110)"> so arc
+// starts at 12 o'clock. Negative dashoffset advances the fill clockwise.
+function renderDonut(container, segments, centerNum, centerLbl) {
+  const cx = 110, cy = 110, r = 75, sw = 30;
+  const circ = 2 * Math.PI * r;   // ≈ 471.2
+  const GAP  = 3;                 // visual gap between segments (px of arc)
+
+  const segs = segments.filter(s => s.value > 0);
+  const total = segs.reduce((s, x) => s + x.value, 0);
+
+  let circles = '';
+  if (!total) {
+    circles = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#e2e8f0" stroke-width="${sw}"/>`;
+  } else {
+    let cum = 0;
+    segs.forEach(seg => {
+      const len    = (seg.value / total) * circ;
+      const visLen = Math.max(len - GAP, 1);
+      const offset = -(cum + GAP / 2);
+      circles += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+        stroke="${esc(seg.color)}" stroke-width="${sw}"
+        stroke-dasharray="${visLen.toFixed(2)} ${(circ - visLen).toFixed(2)}"
+        stroke-dashoffset="${offset.toFixed(2)}"/>`;
+      cum += len;
+    });
+  }
+
+  const legendRows = segments.map(seg => {
+    const pct = total > 0 ? ((seg.value / total) * 100).toFixed(1) : '0.0';
+    return `<div class="legend-row">
+      <div class="legend-left">
+        <div class="legend-dot" style="background:${esc(seg.color)}"></div>
+        <span class="legend-name">${esc(seg.label)}</span>
+      </div>
+      <div class="legend-right">
+        <span class="legend-pct">${pct}%</span>
+        <span class="legend-val">${fmt(seg.value)}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="donut-svg-box">
+      <svg viewBox="0 0 220 220" width="220" height="220">
+        <g transform="rotate(-90 ${cx} ${cy})">${circles}</g>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+        <span style="font-size:22px;font-weight:800;color:#1e293b;line-height:1">${esc(String(centerNum))}</span>
+        <span style="font-size:10px;color:#94a3b8;margin-top:4px;text-align:center">${esc(centerLbl)}</span>
+      </div>
+    </div>
+    <div class="donut-legend">${legendRows}</div>`;
+  container.querySelector('.donut-svg-box').style.position = 'relative';
+}
+
+/* ── SVG Grouped Bar Chart (Per Work Center) ──────────────────────────────── */
+// Matches Recharts BarChart layout: categorical X-axis, numerical Y-axis,
+// two bars per group (Total = #94a3b8, Flagged = #6366f1).
+function renderGroupedBar(container, data) {
+  if (!data || !data.length) {
+    container.innerHTML = `<p class="empty">No data — run pre-checks and AI analysis to populate this chart.</p>`;
+    return;
+  }
+
+  const BW = 16, GAP = 4, GROUP_SPACE = 18;
+  const PAD = { top: 20, right: 12, bottom: 56, left: 36 };
+  const H = 220;
+  const groupW   = 2 * BW + GAP;
+  const svgW     = PAD.left + data.length * (groupW + GROUP_SPACE) - GROUP_SPACE + PAD.right;
+  const baseY    = H - PAD.bottom;
+  const maxVal   = Math.max(...data.map(d => d.total), 1);
+  const scaleH   = (H - PAD.top - PAD.bottom) / maxVal;
+
+  // Y-axis grid lines (4 ticks)
+  let grid = '';
+  for (let i = 0; i <= 4; i++) {
+    const v = Math.round((maxVal / 4) * i);
+    const y = +(baseY - v * scaleH).toFixed(1);
+    grid += `<line x1="${PAD.left}" y1="${y}" x2="${svgW - PAD.right}" y2="${y}"
+      stroke="${i === 0 ? '#e2e8f0' : '#f1f5f9'}" stroke-width="1"/>
+      <text x="${PAD.left - 5}" y="${y + 3.5}" text-anchor="end"
+        font-size="9" fill="#94a3b8">${v}</text>`;
+  }
+
+  let bars = '', labels = '';
+  data.forEach((d, i) => {
+    const gx = PAD.left + i * (groupW + GROUP_SPACE);
+    const th = Math.max((d.total   || 0) * scaleH, d.total   > 0 ? 2 : 0);
+    const fh = Math.max((d.flagged || 0) * scaleH, d.flagged > 0 ? 2 : 0);
+
+    bars += `<rect x="${gx}" y="${+(baseY - th).toFixed(1)}"
+      width="${BW}" height="${+th.toFixed(1)}" fill="#94a3b8" rx="2"/>`;
+    bars += `<rect x="${gx + BW + GAP}" y="${+(baseY - fh).toFixed(1)}"
+      width="${BW}" height="${+fh.toFixed(1)}" fill="#6366f1" rx="2"/>`;
+
+    const lx = +(gx + BW).toFixed(1);
+    const ly = +(baseY + 10).toFixed(1);
+    labels += `<text x="${lx}" y="${ly}" text-anchor="end" font-size="9" fill="#64748b"
+      transform="rotate(-40 ${lx} ${ly})">${esc(d.workCenter)}</text>`;
+  });
+
+  // Legend
+  const legend = `
+    <rect x="${PAD.left}" y="5" width="10" height="10" fill="#94a3b8" rx="2"/>
+    <text x="${PAD.left + 13}" y="14" font-size="10" fill="#94a3b8">Total</text>
+    <rect x="${PAD.left + 50}" y="5" width="10" height="10" fill="#6366f1" rx="2"/>
+    <text x="${PAD.left + 63}" y="14" font-size="10" fill="#6366f1">Flagged</text>`;
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${svgW} ${H}" style="width:100%;min-width:${svgW}px;overflow:visible;display:block">
+      ${legend}${grid}${bars}${labels}
+    </svg>`;
+}
+
+/* ── Main render ──────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  let D;
+  try { D = JSON.parse($('audit-data').textContent); }
+  catch (e) {
+    document.body.innerHTML = `<div style="padding:40px;color:#ef4444;font-family:monospace">
+      <strong>JSON parse error:</strong> ${esc(e.message)}</div>`;
+    return;
+  }
+
+  // ── Meta / stamp ────────────────────────────────────────────────────────
+  const projectName = D.project?.name || 'Reliability Audit';
+  const periodLabel = D.run?.periodLabel || '';
+  const runIndex    = D.run?.runIndex ?? 1;
+  const totalWOs    = D.kpi?.totalWOs ?? 0;
+  const analysedAt  = fmtDateTime(D.run?.lastAnalysedAt);
+
+  $('stamp-left').textContent  = `SAP Reliability Auditor — Exported Report`;
+  $('stamp-right').textContent = analysedAt;
+  $('page-meta').textContent   =
+    `${projectName} · Run #${runIndex} · ${periodLabel} · ${fmt(totalWOs)} WOs in scope`;
+
+  // ── KPI cards ────────────────────────────────────────────────────────────
+  const kpi = D.kpi || {};
+  $('kpi-grid').innerHTML = [
+    { label: 'RULE-FLAGGED WOS', value: kpi.ruleFlaggedWOs, cls: 'amber'  },
+    { label: 'AI-FLAGGED WOS',   value: kpi.aiFlaggedWOs,   cls: 'indigo' },
+    { label: 'TOTAL AI FLAGS',   value: kpi.totalAIFlags,   cls: 'violet' },
+    { label: 'CLEAN WOS',        value: kpi.cleanWOs,       cls: 'green'  },
+  ].map(c => `
+    <div class="kpi-card">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-value mono ${c.cls}">${fmt(c.value)}</div>
+    </div>`).join('');
+
+  // ── Error Distribution ───────────────────────────────────────────────────
+  const ed       = D.errorDistribution || [];
+  const maxEd    = Math.max(...ed.map(x => x.value || 0), 1);
+  const ruleItems = ed.filter(x => x.type === 'Rule' && x.value > 0);
+  const aiItems   = ed.filter(x => x.type === 'AI'   && x.value > 0);
+
+  let edHtml = '';
+  if (ruleItems.length) {
+    edHtml += `<div class="ed-section">Rule-Based Issues</div>`;
+    ruleItems.forEach(item => {
+      const w = ((item.value / maxEd) * 100).toFixed(1);
+      edHtml += `<div class="bar-row">
+        <div class="bar-row-label">${esc(item.label)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${w}%;background:#f59e0b"></div></div>
+        <div class="bar-count">${fmt(item.value)}</div>
+      </div>`;
+    });
+  }
+  if (aiItems.length) {
+    edHtml += `<div class="ed-section">AI-Detected Issues</div>`;
+    aiItems.forEach(item => {
+      const w = ((item.value / maxEd) * 100).toFixed(1);
+      edHtml += `<div class="bar-row">
+        <div class="bar-row-label">${esc(item.label)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${w}%;background:#6366f1"></div></div>
+        <div class="bar-count">${fmt(item.value)}</div>
+      </div>`;
+    });
+  }
+  $('chart-ed').innerHTML = edHtml ||
+    `<p class="empty">No data — run pre-checks and AI analysis to populate this chart.</p>`;
+
+  // ── Code Quality donut ───────────────────────────────────────────────────
+  const cq = D.codeQuality || {};
+  renderDonut($('chart-cq'), [
+    { label: 'Valid',             value: cq.valid            || 0, color: '#22c55e' },
+    { label: '"Not Listed"',      value: cq.notListed        || 0, color: '#f59e0b' },
+    { label: 'Invalid Hierarchy', value: cq.invalidHierarchy || 0, color: '#ef4444' },
+    { label: 'Missing',           value: cq.missing          || 0, color: '#94a3b8' },
+  ], fmt(cq.valid || 0), 'Valid');
+
+  // ── Overall Quality donut ────────────────────────────────────────────────
+  const oq = D.overallQuality || {};
+  renderDonut($('chart-oq'), [
+    { label: 'Valid',                value: oq.valid         || 0, color: '#22c55e' },
+    { label: 'Entry Quality (AI)',   value: oq.entryQuality  || 0, color: '#6366f1' },
+    { label: 'Missing Fields (Rule)',value: oq.missingFields || 0, color: '#f59e0b' },
+  ], fmt(oq.total || 0), 'Total WOs');
+
+  // ── Per Work Center bar chart ────────────────────────────────────────────
+  renderGroupedBar($('chart-wc'), D.perWorkCenter || []);
+
+  // ── Top Equipment ────────────────────────────────────────────────────────
+  const te    = D.topEquipment || [];
+  const maxEq = Math.max(...te.map(x => x.count || 0), 1);
+  $('chart-eq').innerHTML = te.length
+    ? te.map((item, i) => `
+        <div class="eq-row">
+          <div class="eq-rank">${i + 1}</div>
+          <div class="eq-body">
+            <div class="eq-name mono" title="${esc(item.equipment)}">${esc(item.equipment)}</div>
+            <div class="eq-bar-track">
+              <div class="eq-bar-fill" style="width:${((item.count / maxEq) * 100).toFixed(1)}%"></div>
+            </div>
+          </div>
+          <div class="eq-count mono">${fmt(item.count)}</div>
+        </div>`).join('')
+    : `<p class="empty">No data — run pre-checks and AI analysis to populate this chart.</p>`;
+
+  // ── Issues view ──────────────────────────────────────────────────────────
+  const issues = D.issues || [];
+  const ruleIssues = issues.filter(x => x.ruleFlags?.length);
+  const aiIssues   = issues.filter(x => x.aiFlags?.length);
+
+  $('issues-count-label').textContent =
+    `${ruleIssues.length} rule-flagged · ${aiIssues.length} AI-flagged`;
+
+  // Rule Flags tab
+  $('tab-rule-content').innerHTML = ruleIssues.length
+    ? ruleIssues.map((issue, idx) => issueCard('r' + idx, issue, 'rule')).join('')
+    : `<p class="empty">No rule-flagged work orders in this run.</p>`;
+
+  // AI Flags tab
+  $('tab-ai-content').innerHTML = aiIssues.length
+    ? aiIssues.map((issue, idx) => issueCard('a' + idx, issue, 'ai')).join('')
+    : `<p class="empty">No AI-flagged work orders in this run.</p>`;
+});
+
+/* ── Build a single issue card ────────────────────────────────────────────── */
+function issueCard(id, issue, mode) {
+  // Header badges
+  const badges = mode === 'rule'
+    ? (issue.ruleFlags || []).map(ruleBadge).join('')
+    : `${sevBadge((issue.aiFlags || [])[0]?.severity || 'LOW')}<span class="badge indigo">${issue.aiFlags?.length || 0} flag${issue.aiFlags?.length !== 1 ? 's' : ''}</span>`;
+
+  // Detail body
+  let detail = `
+    <div class="detail-lbl">Work Order</div>
+    <div class="detail-field"><span class="detail-field-key">Equipment</span><span class="detail-field-val">${esc(issue.equipment || '—')}</span></div>
+    <div class="detail-field"><span class="detail-field-key">Work Center</span><span class="detail-field-val">${esc(issue.workCenter || '—')}</span></div>
+    <div class="detail-field"><span class="detail-field-key">Description</span><span class="detail-field-val">${esc(issue.description || '—')}</span></div>
+    <div class="detail-field"><span class="detail-field-key">Codes</span><span class="detail-field-val amber">${esc(issue.codes || '—')}</span></div>`;
+
+  if (mode === 'rule' && issue.ruleFlags?.length) {
+    detail += `<div style="margin-top:10px"><div class="detail-lbl">Rule Flags</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">${(issue.ruleFlags || []).map(ruleBadge).join('')}</div></div>`;
+  }
+  if (mode === 'ai' && issue.aiFlags?.length) {
+    detail += `<div style="margin-top:10px"><div class="detail-lbl">AI Flags</div>
+      <div>${(issue.aiFlags || []).map(flag => {
+        const rowTag = flag.rowSeq != null ? `<span class="badge slate">Row ${flag.rowSeq}</span>` : '';
+        const opLine = flag.operationDesc ? `<div class="ai-meta"><strong>Operation:</strong> ${esc(flag.operationDesc)}</div>` : '';
+        const clLine = flag.closure ? `<div class="ai-meta"><strong>Confirmation:</strong> ${esc(flag.closure)}</div>` : '';
+        return `<div class="ai-entry">
+          <div class="ai-entry-hdr">${rowTag}${aiBadge(flag.category)}${sevBadge(flag.severity)}</div>
+          <div class="ai-comment">${esc(flag.comment)}</div>
+          ${opLine}${clLine}
+        </div>`;
+      }).join('')}</div></div>`;
+  }
+
+  return `<div class="issue-card">
+    <div class="issue-card-hdr" onclick="toggleIssue('${esc(id)}')">
+      <span class="issue-wo mono">${esc(issue.woNumber)}</span>
+      <span class="issue-equip">${esc(issue.equipment || '—')}</span>
+      <div class="issue-badges">${badges}</div>
+      <span class="issue-caret" id="${esc(id)}-caret">▼</span>
+    </div>
+    <div class="issue-detail" id="${esc(id)}-detail">${detail}</div>
+  </div>`;
+}
+</script>
+
+</body>
+</html>

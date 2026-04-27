@@ -11,7 +11,22 @@ import {
   createAnalysisScopeView,
 } from '../services/DuckDBService';
 import { EMPTY_FILTERS } from '../types';
-import type { AnalysisFilters, FilterOptions, ColumnMap } from '../types';
+import type { AnalysisFilters, FilterOptions, ColumnMap, AIFlag, RuleCheckResult } from '../types';
+
+const RULE_LABELS: Record<string, string> = {
+  missing_confirmation: 'Missing Confirmation',
+  not_listed_codes:     '"Not Listed" Codes',
+  missing_scoping_text: 'Missing Scoping Text',
+};
+
+const AI_LABELS: Record<string, string> = {
+  desc_code_conflict:              'Desc — Code Conflict',
+  false_not_listed:                'False Not Listed',
+  desc_confirmation_mismatch:      'Desc — Confirmation Mismatch',
+  desc_code_confirmation_misalign: 'Desc — Code — Conf. Misalignment',
+  generic_description:             'Generic Description',
+  generic_confirmation:            'Generic Confirmation',
+};
 
 interface WorkCenterAuditData {
   workCenter: string;
@@ -19,17 +34,18 @@ interface WorkCenterAuditData {
   totalWOs: number;
   ruleFlagsCount: number;
   aiFlagsCount: number;
+  ruleDistribution: Record<string, number>;
+  aiDistribution: Record<string, number>;
 }
 
 // ── Standalone WC loader (mirrors ReportingSettingsScreen logic) ─────────────
 async function loadWorkCenters(
   columnMap: ColumnMap,
   filters: AnalysisFilters,
-  _aiFlags: any[],
-  _ruleChecks: any,
+  aiFlags: AIFlag[],
+  ruleChecks: RuleCheckResult | null,
 ): Promise<WorkCenterAuditData[]> {
   const hasWC = !!columnMap.work_center;
-  console.log('[AuditReport] loadWorkCenters called, hasWC:', hasWC, 'columnMap:', columnMap);
   if (!hasWC) return [];
 
   const descCol = columnMap.work_center_description ? 'work_center_description' : null;
@@ -49,31 +65,61 @@ async function loadWorkCenters(
     if (eq) conditions.push(`${eq} IN (${filters.equipment.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`);
   }
 
-  const where = `WHERE ${conditions.join(' AND ')}`;
+  const where  = `WHERE ${conditions.join(' AND ')}`;
   const descExpr = descCol ? `MAX(${descCol})` : `''`;
 
+  // STRING_AGG used instead of ARRAY_AGG for safe JS string handling across DuckDB versions
   const sql = `
     SELECT
       work_center,
       ${descExpr} AS description,
-      COUNT(work_order_number) AS total_wos
+      COUNT(work_order_number) AS total_wos,
+      STRING_AGG(CAST(work_order_number AS VARCHAR), '|') AS wo_list
     FROM v_wo_primary
     ${where}
     GROUP BY work_center
     ORDER BY work_center
   `;
 
-  console.log('[AuditReport] Running SQL:', sql);
   const rows = await query(sql);
-  console.log('[AuditReport] Got rows:', rows.length, rows.slice(0, 3));
 
-  return rows.map(r => ({
-    workCenter: String(r.work_center ?? ''),
-    description: String(r.description ?? ''),
-    totalWOs: Number(r.total_wos ?? 0),
-    aiFlagsCount: 0,
-    ruleFlagsCount: 0,
-  }));
+  return rows.map(r => {
+    const woSet = new Set(
+      String(r.wo_list ?? '').split('|').filter(Boolean)
+    );
+
+    // Rule distribution: count flagged WOs per rule check ID
+    const ruleDistribution: Record<string, number> = {};
+    let ruleFlagsCount = 0;
+    if (ruleChecks?.flaggedWOs) {
+      for (const fw of ruleChecks.flaggedWOs) {
+        if (!woSet.has(fw.wo)) continue;
+        ruleFlagsCount++;
+        for (const checkId of fw.checks) {
+          ruleDistribution[checkId] = (ruleDistribution[checkId] ?? 0) + 1;
+        }
+      }
+    }
+
+    // AI distribution: unique flagged WOs per category
+    const aiDistribution: Record<string, number> = {};
+    const aiFlaggedWOs = new Set<string>();
+    for (const flag of aiFlags) {
+      if (!woSet.has(flag.woNumber)) continue;
+      aiFlaggedWOs.add(flag.woNumber);
+      aiDistribution[flag.category] = (aiDistribution[flag.category] ?? 0) + 1;
+    }
+
+    return {
+      workCenter:       String(r.work_center ?? ''),
+      description:      String(r.description ?? ''),
+      totalWOs:         Number(r.total_wos ?? 0),
+      ruleFlagsCount,
+      aiFlagsCount:     aiFlaggedWOs.size,
+      ruleDistribution,
+      aiDistribution,
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -169,33 +215,98 @@ export default function AuditReportScreen() {
     setSelectedWCs(next);
   };
 
-  const getEmailHtml = (wc: WorkCenterAuditData) => {
+  const getEmailText = (wc: WorkCenterAuditData): string => {
     const period = (filters.dateFrom || filters.dateTo)
       ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}`
       : 'All time';
+    const projectName = project?.name || 'Reliability Audit';
+    const periodLabel = run?.periodLabel || '';
+    const now = new Date().toLocaleDateString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    });
+    const sep  = '='.repeat(58);
+    const dash = '-'.repeat(42);
+    const wcLabel = wc.description ? `${wc.workCenter} (${wc.description})` : wc.workCenter;
 
-    return `
-      <div style="font-family: sans-serif; color: #333; line-height: 1.6;">
-        <p>Dear ${wc.description || wc.workCenter},</p>
-        <p>This is an automated summary of the latest Reliability Audit for your work center.</p>
+    // Helper: left-pad a label to a fixed width for aligned columns
+    const distLine = (label: string, count: number) =>
+      `    ${label.padEnd(38)}${count} WO${count !== 1 ? 's' : ''}`;
 
-        <h3 style="color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">Audit Scope</h3>
-        <ul style="margin: 0; padding-left: 20px;">
-          <li><strong>Period:</strong> ${period}</li>
-          <li><strong>Work Center:</strong> ${wc.workCenter}</li>
-        </ul>
+    // Build rule distribution lines (skip zero counts)
+    const ruleLines = Object.entries(wc.ruleDistribution)
+      .filter(([, v]) => v > 0)
+      .sort(([, a], [, b]) => b - a)
+      .map(([key, val]) => distLine(RULE_LABELS[key] ?? key, val));
 
-        <h3 style="color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-top: 20px;">Findings Summary</h3>
-        <ul style="margin: 0; padding-left: 20px;">
-          <li><strong>Total Work Orders Analyzed:</strong> ${wc.totalWOs}</li>
-          <li><strong>Work Orders with Rule Flags:</strong> ${wc.ruleFlagsCount}</li>
-          <li><strong>Work Orders with AI Semantic Flags:</strong> ${wc.aiFlagsCount}</li>
-        </ul>
+    // Build AI distribution lines (skip zero counts)
+    const aiLines = Object.entries(wc.aiDistribution)
+      .filter(([, v]) => v > 0)
+      .sort(([, a], [, b]) => b - a)
+      .map(([key, val]) => distLine(AI_LABELS[key] ?? key, val));
 
-        <p style="margin-top: 20px;">Please review the SAP Auditor dashboard for detailed insights and to resolve any flagged issues.</p>
-        <p style="color: #64748b; font-size: 0.9em; margin-top: 30px;">Generated by SAP Auditor Platform</p>
-      </div>
-    `;
+    const hasAnyFlags = wc.ruleFlagsCount > 0 || wc.aiFlagsCount > 0;
+
+    const errorDistSection: string[] = [
+      'ERROR DISTRIBUTION',
+      dash,
+    ];
+
+    if (!hasAnyFlags) {
+      errorDistSection.push('  No issues detected for this work center.');
+    } else {
+      if (ruleLines.length > 0) {
+        errorDistSection.push('  Rule-Based Issues:', ...ruleLines, '');
+      }
+      if (aiLines.length > 0) {
+        errorDistSection.push('  AI-Detected Issues:', ...aiLines);
+      }
+    }
+
+    return [
+      sep,
+      `  RELIABILITY AUDIT REPORT — ${projectName}`,
+      `  Work Center: ${wcLabel}`,
+      `  Period: ${periodLabel || period}  |  Generated: ${now}`,
+      sep,
+      '',
+      `Audit Scope: ${period}`,
+      '',
+      '',
+      'SUMMARY',
+      dash,
+      `This is an automated Reliability Audit summary for Work`,
+      `Center ${wc.workCenter}. A full interactive dashboard is`,
+      `attached to this email — open it in any web browser to`,
+      `view charts, per-category breakdowns, and the complete`,
+      `list of flagged work orders with AI comments.`,
+      '',
+      '',
+      'FINDINGS',
+      dash,
+      `  ${'Total Work Orders Analyzed'.padEnd(30)}${wc.totalWOs}`,
+      `  ${'Work Orders — Rule Flags'.padEnd(30)}${wc.ruleFlagsCount}`,
+      `  ${'Work Orders — AI Flags'.padEnd(30)}${wc.aiFlagsCount}`,
+      '',
+      '',
+      ...errorDistSection,
+      '',
+      '',
+      'ACTION REQUIRED',
+      dash,
+      `Please review the flagged work orders for Work Center`,
+      `${wc.workCenter} using the attached dashboard and apply`,
+      `the necessary corrections in SAP, prioritising:`,
+      '',
+      `  1. HIGH-severity AI flags (misleading or conflicting data)`,
+      `  2. Missing Confirmation (no closure text recorded)`,
+      `  3. "Not Listed" Codes (incomplete failure coding)`,
+      '',
+      '',
+      sep,
+      `  SAP Reliability Auditor  ·  ${now}`,
+      `  This message was generated automatically. Do not reply.`,
+      sep,
+    ].join('\n');
   };
 
   const sendEmail = async (wc: WorkCenterAuditData) => {
@@ -213,8 +324,8 @@ export default function AuditReportScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           emailTo,
-          subject: `Reliability Audit Report - ${wc.description || wc.workCenter}`,
-          emailBody: getEmailHtml(wc),
+          subject: `Reliability Audit Report — ${wc.description || wc.workCenter}`,
+          emailBody: getEmailText(wc),
         }),
       });
       setSendingStatus(prev => ({ ...prev, [wc.workCenter]: res.ok ? 'success' : 'error' }));
@@ -405,10 +516,9 @@ export default function AuditReportScreen() {
                   </span>
                 </div>
               </div>
-              <div
-                className="p-6 prose prose-sm max-w-none text-slate-700"
-                dangerouslySetInnerHTML={{ __html: getEmailHtml(previewWC) }}
-              />
+              <pre className="p-6 text-xs font-mono text-slate-700 whitespace-pre-wrap leading-relaxed">
+                {getEmailText(previewWC)}
+              </pre>
             </div>
           ) : (
             <div className="m-auto text-center text-slate-400 max-w-xs">
