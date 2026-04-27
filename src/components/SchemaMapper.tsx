@@ -23,7 +23,7 @@ const TEXT_NON_CODE: CanonicalColumn[] = TEXT_COLUMNS.filter(
 const COLUMN_GROUPS: { label: string; cols: CanonicalColumn[] }[] = [
   { label: 'Identifiers', cols: IDENTIFIER_COLUMNS },
   { label: 'Date', cols: TIMESTAMP_COLUMNS },
-  { label: 'Description & Equipment', cols: ['work_order_description', 'work_center', 'equipment_description', 'functional_location_description', 'operation_description'] as CanonicalColumn[] },
+  { label: 'Description & Equipment', cols: ['work_order_description', 'work_center_description', 'equipment_description', 'functional_location_description', 'operation_description'] as CanonicalColumn[] },
   { label: 'Failure Codes (Description Form)', cols: CODE_DESCRIPTION_COLUMNS },
   { label: 'Confirmation', cols: ['confirmation_text', 'confirmation_long_text'] as CanonicalColumn[] },
   { label: 'Scoping Template', cols: ['code_group'] as CanonicalColumn[] },
