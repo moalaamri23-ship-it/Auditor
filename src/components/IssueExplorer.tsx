@@ -1,16 +1,22 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Icon from './Icon';
-import { useActiveRun, useStore } from '../store/useStore';
-import { query } from '../services/DuckDBService';
+import FilterPanel from './FilterPanel';
+import { useActiveRun, useActiveProject, useStore } from '../store/useStore';
+import {
+  query, getFilterOptions, getLiveScopeCount, getCascadingFilterOptions,
+  createAnalysisScopeView,
+} from '../services/DuckDBService';
 import { RULE_CHECK_LABELS } from '../analysis/RuleChecksModule';
 import { FLAG_CATEGORY_LABELS } from '../analysis/AITextModule';
 import type {
   AIFlag, FlagCategory, ColumnMap, RuleCheckId, RuleCheckResult,
+  AnalysisFilters, FilterOptions,
 } from '../types';
+import { EMPTY_FILTERS } from '../types';
 
 type Tab = 'data' | 'rule-flags' | 'ai-flags';
 
-// ─── Full-table WO data (Issue 4) ───────────────────────────────────────────
+// ─── Full-table WO data ──────────────────────────────────────────────────────
 
 interface FullTableData {
   columns: string[];
@@ -18,7 +24,6 @@ interface FullTableData {
 }
 
 async function loadFullWOData(): Promise<FullTableData> {
-  // Get column list from audit table schema
   const schemaRows = await query(`DESCRIBE audit`);
   const columns = schemaRows
     .map((r: any) => String(r.column_name ?? ''))
@@ -31,7 +36,7 @@ async function loadFullWOData(): Promise<FullTableData> {
   return { columns, rows };
 }
 
-// ─── Curated 6-field WO detail (Issue 5 expand panel) ──────────────────────
+// ─── Curated WO detail for Rule Flags expand panel ──────────────────────────
 
 interface WODetail {
   woNumber: string;
@@ -95,12 +100,62 @@ async function loadWODetail(woNumber: string, columnMap: ColumnMap): Promise<WOD
 
 export default function IssueExplorer() {
   const run = useActiveRun();
+  const project = useActiveProject();
   const { setScreen } = useStore();
+
   const [tab, setTab] = useState<Tab>('data');
   const [tableData, setTableData] = useState<FullTableData>({ columns: [], rows: [] });
   const [loadingWO, setLoadingWO] = useState(false);
   const [search, setSearch] = useState('');
 
+  // ── Filter state ────────────────────────────────────────────────────────────
+  const [filters, setFilters] = useState<AnalysisFilters>(run?.analysisFilters ?? EMPTY_FILTERS);
+  const [baseFilterOptions, setBaseFilterOptions] = useState<FilterOptions | null>(null);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
+  const [liveScopeCount, setLiveScopeCount] = useState<number | null>(null);
+  const [scopeWoSet, setScopeWoSet] = useState<Set<string> | null>(null);
+
+  // Load filter options once when data is in DB
+  useEffect(() => {
+    if (!run?.hasDataInDB || !run.columnMap) return;
+    getFilterOptions(run.columnMap).then((opts) => {
+      setBaseFilterOptions(opts);
+      setFilterOptions(opts);
+    }).catch(() => {});
+  }, [run?.hasDataInDB, run?.id]);
+
+  // Debounced: update scope WO set + cascading options on filter change
+  useEffect(() => {
+    if (!run?.hasDataInDB || !run.columnMap || !baseFilterOptions) return;
+    const hasActive =
+      !!filters.dateFrom || !!filters.dateTo ||
+      filters.workCenter.length > 0 || filters.functionalLocation.length > 0 ||
+      filters.failureCatalog.length > 0 || filters.equipment.length > 0;
+
+    const t = setTimeout(async () => {
+      const [count, cascaded] = await Promise.all([
+        getLiveScopeCount(filters, run.columnMap, project),
+        getCascadingFilterOptions(filters, run.columnMap, project, baseFilterOptions),
+      ]);
+      setLiveScopeCount(count);
+      setFilterOptions(cascaded);
+
+      if (hasActive) {
+        try {
+          await createAnalysisScopeView(filters, run.columnMap, project);
+          const rows = await query('SELECT work_order_number FROM v_analysis_scope');
+          setScopeWoSet(new Set(rows.map((r) => String(r.work_order_number ?? ''))));
+        } catch {
+          setScopeWoSet(null);
+        }
+      } else {
+        setScopeWoSet(null);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [filters, run?.hasDataInDB, run?.id, baseFilterOptions, project]);
+
+  // Load WO data when tab opens
   useEffect(() => {
     if (tab === 'data' && run?.hasDataInDB) {
       setLoadingWO(true);
@@ -111,19 +166,40 @@ export default function IssueExplorer() {
     }
   }, [tab, run?.id, run?.hasDataInDB]);
 
+  // ── Filtered slices ─────────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
+    let rows = tableData.rows;
+    if (scopeWoSet !== null) {
+      rows = rows.filter((r) => scopeWoSet.has(String(r.work_order_number ?? '')));
+    }
     const q = search.toLowerCase().trim();
-    if (!q || tableData.rows.length === 0) return tableData.rows;
-    return tableData.rows.filter((r) =>
-      Object.values(r).some((v) => String(v ?? '').toLowerCase().includes(q))
-    );
-  }, [tableData.rows, search]);
+    if (q) {
+      rows = rows.filter((r) =>
+        Object.values(r).some((v) => String(v ?? '').toLowerCase().includes(q))
+      );
+    }
+    return rows;
+  }, [tableData.rows, search, scopeWoSet]);
+
+  const filteredRuleFlags = useMemo(() => {
+    if (!run?.ruleChecks) return [];
+    if (scopeWoSet === null) return run.ruleChecks.flaggedWOs;
+    return run.ruleChecks.flaggedWOs.filter((f) => scopeWoSet.has(f.wo));
+  }, [run?.ruleChecks, scopeWoSet]);
+
+  const filteredAIFlags = useMemo(() => {
+    if (!run?.aiFlags) return [];
+    if (scopeWoSet === null) return run.aiFlags;
+    return run.aiFlags.filter((f) => scopeWoSet.has(f.woNumber));
+  }, [run?.aiFlags, scopeWoSet]);
 
   if (!run) {
     return (
       <div className="flex items-center justify-center h-full text-slate-400 text-sm">No active run.</div>
     );
   }
+
+  const totalWOs = run.dataProfile?.distinctWOs ?? 0;
 
   return (
     <div className="max-w-full px-6 py-6">
@@ -144,6 +220,20 @@ export default function IssueExplorer() {
           </button>
         </div>
 
+        {/* Audit scope filter panel */}
+        {filterOptions && (
+          <div className="mb-4">
+            <FilterPanel
+              filters={filters}
+              options={filterOptions}
+              columnMap={run.columnMap}
+              totalWOs={totalWOs}
+              scopeWOs={liveScopeCount ?? totalWOs}
+              onChange={setFilters}
+            />
+          </div>
+        )}
+
         <div className="flex border-b border-slate-200 mb-4">
           <TabButton active={tab === 'data'} onClick={() => setTab('data')}>
             WO Data <span className="ml-1 text-slate-400">({filteredRows.length})</span>
@@ -151,11 +241,11 @@ export default function IssueExplorer() {
           <TabButton active={tab === 'rule-flags'} onClick={() => setTab('rule-flags')}>
             Rule Flags{' '}
             <span className="ml-1 text-slate-400">
-              ({run.ruleChecks ? new Set(run.ruleChecks.flaggedWOs.map((f) => f.wo)).size : 0})
+              ({new Set(filteredRuleFlags.map((f) => f.wo)).size})
             </span>
           </TabButton>
           <TabButton active={tab === 'ai-flags'} onClick={() => setTab('ai-flags')}>
-            AI Flags <span className="ml-1 text-slate-400">({run.aiFlags?.length ?? 0})</span>
+            AI Flags <span className="ml-1 text-slate-400">({filteredAIFlags.length})</span>
           </TabButton>
         </div>
 
@@ -170,9 +260,16 @@ export default function IssueExplorer() {
           />
         )}
         {tab === 'rule-flags' && run.ruleChecks && (
-          <RuleFlagsTab result={run.ruleChecks} columnMap={run.columnMap} hasDB={!!run.hasDataInDB} />
+          <RuleFlagsTab
+            result={run.ruleChecks}
+            filteredFlaggedWOs={filteredRuleFlags}
+            columnMap={run.columnMap}
+            hasDB={!!run.hasDataInDB}
+          />
         )}
-        {tab === 'ai-flags' && <AIFlagsTab flags={run.aiFlags ?? []} />}
+        {tab === 'ai-flags' && (
+          <AIFlagsTab flags={filteredAIFlags} />
+        )}
       </div>
     </div>
   );
@@ -199,7 +296,7 @@ function TabButton({
   );
 }
 
-// ─── DataTab — full raw table (Issue 4) ─────────────────────────────────────
+// ─── DataTab ─────────────────────────────────────────────────────────────────
 
 function DataTab({
   columns,
@@ -278,14 +375,16 @@ function DataTab({
   );
 }
 
-// ─── RuleFlagsTab — expandable rows (Issue 5) ────────────────────────────────
+// ─── RuleFlagsTab ─────────────────────────────────────────────────────────────
 
 function RuleFlagsTab({
   result,
+  filteredFlaggedWOs,
   columnMap,
   hasDB,
 }: {
   result: RuleCheckResult;
+  filteredFlaggedWOs: RuleCheckResult['flaggedWOs'];
   columnMap: ColumnMap;
   hasDB: boolean;
 }) {
@@ -295,10 +394,21 @@ function RuleFlagsTab({
   const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
 
   const ids = Object.keys(RULE_CHECK_LABELS) as RuleCheckId[];
-  const filteredFlags = useMemo(() => {
-    if (filter === 'ALL') return result.flaggedWOs;
-    return result.flaggedWOs.filter((f) => f.checks.includes(filter));
-  }, [result.flaggedWOs, filter]);
+
+  const displayFlags = useMemo(() => {
+    if (filter === 'ALL') return filteredFlaggedWOs;
+    return filteredFlaggedWOs.filter((f) => f.checks.includes(filter));
+  }, [filteredFlaggedWOs, filter]);
+
+  // Per-check counts from the filtered set
+  const filteredPerCheck = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const id of ids) counts[id] = 0;
+    for (const f of filteredFlaggedWOs) {
+      for (const c of f.checks) counts[c] = (counts[c] ?? 0) + 1;
+    }
+    return counts;
+  }, [filteredFlaggedWOs, ids]);
 
   const toggleWO = async (wo: string) => {
     if (expandedWO === wo) {
@@ -324,11 +434,11 @@ function RuleFlagsTab({
         <FilterChip
           active={filter === 'ALL'}
           label="All"
-          count={result.flaggedWOs.length}
+          count={filteredFlaggedWOs.length}
           onClick={() => setFilter('ALL')}
         />
         {ids.map((id) => {
-          const c = result.perCheck[id]?.matched ?? 0;
+          const c = filteredPerCheck[id] ?? 0;
           if (c === 0) return null;
           return (
             <FilterChip
@@ -342,11 +452,11 @@ function RuleFlagsTab({
         })}
       </div>
       <div className="bg-white border border-slate-200 rounded shadow-sm">
-        {filteredFlags.length === 0 ? (
+        {displayFlags.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-sm">No work orders match this filter.</div>
         ) : (
           <ul className="divide-y divide-slate-100 max-h-[600px] overflow-auto scroll-thin">
-            {filteredFlags.slice(0, 500).map((f) => {
+            {displayFlags.slice(0, 500).map((f) => {
               const isExpanded = expandedWO === f.wo;
               const detail = detailCache.get(f.wo);
               const isLoading = loadingDetail === f.wo;
@@ -362,6 +472,7 @@ function RuleFlagsTab({
                       className="w-3.5 h-3.5 text-slate-400 shrink-0"
                     />
                     <span className="font-mono font-bold text-slate-800 w-32 shrink-0">{f.wo}</span>
+                    <CopyButton text={f.wo} />
                     <div className="flex flex-wrap gap-1 flex-1">
                       {f.checks.map((c) => (
                         <span
@@ -396,9 +507,9 @@ function RuleFlagsTab({
                 </li>
               );
             })}
-            {filteredFlags.length > 500 && (
+            {displayFlags.length > 500 && (
               <li className="px-4 py-3 text-xs text-slate-400 italic">
-                … and {filteredFlags.length - 500} more.
+                … and {displayFlags.length - 500} more.
               </li>
             )}
           </ul>
@@ -435,23 +546,41 @@ function WODetailPanel({ detail }: { detail: WODetail }) {
   );
 }
 
-// ─── AIFlagsTab ──────────────────────────────────────────────────────────────
+// ─── AIFlagsTab — expandable rows ────────────────────────────────────────────
 
 function AIFlagsTab({ flags }: { flags: AIFlag[] }) {
   const [filter, setFilter] = useState<FlagCategory | 'ALL'>('ALL');
+  const [expandedIdxs, setExpandedIdxs] = useState<Set<number>>(new Set());
 
   const categories = Object.keys(FLAG_CATEGORY_LABELS) as FlagCategory[];
-  const filtered = useMemo(() => {
+
+  // Per-category counts from the scope-filtered flags
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const f of flags) counts[f.category] = (counts[f.category] ?? 0) + 1;
+    return counts;
+  }, [flags]);
+
+  const displayed = useMemo(() => {
     if (filter === 'ALL') return flags;
     return flags.filter((f) => f.category === filter);
   }, [flags, filter]);
+
+  const toggle = (idx: number) => {
+    setExpandedIdxs((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
 
   return (
     <div>
       <div className="flex flex-wrap gap-2 mb-4">
         <FilterChip active={filter === 'ALL'} label="All" count={flags.length} onClick={() => setFilter('ALL')} />
         {categories.map((c) => {
-          const count = flags.filter((f) => f.category === c).length;
+          const count = categoryCounts[c] ?? 0;
           if (count === 0) return null;
           return (
             <FilterChip
@@ -465,58 +594,99 @@ function AIFlagsTab({ flags }: { flags: AIFlag[] }) {
         })}
       </div>
 
-      <div className="space-y-3">
-        {filtered.length === 0 && (
-          <div className="bg-white border border-slate-200 rounded shadow-sm p-12 text-center text-slate-400 text-sm">
-            No AI flags match this filter.
-          </div>
-        )}
-        {filtered.slice(0, 200).map((f, i) => (
-          <FlagCard key={`${f.woNumber}-${i}`} flag={f} />
-        ))}
-        {filtered.length > 200 && (
-          <div className="text-xs text-slate-400 italic px-2">
-            Showing first 200 of {filtered.length} flags.
-          </div>
+      <div className="bg-white border border-slate-200 rounded shadow-sm">
+        {displayed.length === 0 ? (
+          <div className="p-12 text-center text-slate-400 text-sm">No AI flags match this filter.</div>
+        ) : (
+          <ul className="divide-y divide-slate-100 max-h-[600px] overflow-auto scroll-thin">
+            {displayed.slice(0, 500).map((f, i) => {
+              const isExpanded = expandedIdxs.has(i);
+              const sevColor =
+                f.severity === 'HIGH'
+                  ? 'bg-red-100 text-red-700'
+                  : f.severity === 'MEDIUM'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-yellow-100 text-yellow-700';
+
+              return (
+                <li key={`${f.woNumber}-${i}`}>
+                  <button
+                    onClick={() => toggle(i)}
+                    className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 hover:bg-slate-50 transition"
+                  >
+                    <Icon
+                      name={isExpanded ? 'chevronDown' : 'chevronRight'}
+                      className="w-3.5 h-3.5 text-slate-400 shrink-0"
+                    />
+                    <span className="font-mono font-bold text-slate-800 w-32 shrink-0">{f.woNumber}</span>
+                    <CopyButton text={f.woNumber} />
+                    <div className="flex flex-wrap gap-1 flex-1 items-center">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${sevColor}`}>
+                        {f.severity}
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                        {FLAG_CATEGORY_LABELS[f.category]}
+                      </span>
+                      {f.equipment && (
+                        <span className="text-[10px] text-slate-400 font-mono truncate max-w-[200px]">
+                          {f.equipment}
+                        </span>
+                      )}
+                    </div>
+                    <Icon
+                      name={isExpanded ? 'chevronUp' : 'chevronDown'}
+                      className="w-3.5 h-3.5 text-slate-300 shrink-0"
+                    />
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-3 pt-1 bg-slate-50 border-t border-slate-100 animate-enter">
+                      <AIFlagDetailPanel flag={f} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+            {displayed.length > 500 && (
+              <li className="px-4 py-3 text-xs text-slate-400 italic">
+                … and {displayed.length - 500} more.
+              </li>
+            )}
+          </ul>
         )}
       </div>
     </div>
   );
 }
 
-function FlagCard({ flag }: { flag: AIFlag }) {
-  const sevColor =
-    flag.severity === 'HIGH'
-      ? 'bg-red-100 text-red-700'
-      : flag.severity === 'MEDIUM'
-        ? 'bg-amber-100 text-amber-700'
-        : 'bg-yellow-100 text-yellow-700';
+function AIFlagDetailPanel({ flag }: { flag: AIFlag }) {
   return (
-    <div className="bg-white border border-slate-200 rounded shadow-sm p-4 animate-enter">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono font-bold text-slate-800">{flag.woNumber}</span>
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${sevColor}`}>
-              {flag.severity}
-            </span>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-              {FLAG_CATEGORY_LABELS[flag.category]}
-            </span>
+    <div className="space-y-2 py-1">
+      <div className="bg-indigo-50 border border-indigo-100 rounded px-3 py-2 text-xs text-indigo-800">
+        {flag.comment}
+      </div>
+      <div className="grid sm:grid-cols-3 gap-3 text-xs">
+        {flag.equipment && (
+          <div>
+            <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Equipment</div>
+            <div className="font-mono text-slate-700">{flag.equipment}</div>
           </div>
-          {flag.equipment && (
-            <div className="text-xs text-slate-500 font-mono mt-0.5 truncate">{flag.equipment}</div>
-          )}
+        )}
+        <div className={flag.equipment ? 'sm:col-span-2' : 'sm:col-span-3'}>
+          <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Description</div>
+          <div className="text-slate-700">{flag.description || '—'}</div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Codes</div>
+          <div className="font-mono text-amber-700">{flag.codes || '—'}</div>
+        </div>
+        <div className="sm:col-span-2">
+          <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Confirmation</div>
+          <div className="text-slate-500">{flag.closure || '—'}</div>
         </div>
       </div>
-      <p className="text-sm text-slate-700 mt-2">{flag.comment}</p>
-      <div className="mt-3 grid sm:grid-cols-3 gap-3 text-xs">
-        <Snapshot title="Description" body={flag.description} />
-        <Snapshot title="Codes" body={flag.codes} mono />
-        <Snapshot title="Confirmation" body={flag.closure} />
-      </div>
       {flag.suggested && (
-        <div className="mt-3 px-3 py-2 bg-violet-50 border border-violet-200 rounded text-xs">
+        <div className="px-3 py-2 bg-violet-50 border border-violet-200 rounded text-xs">
           <div className="font-bold text-violet-700 mb-1">Suggested catalog match</div>
           <div className="font-mono text-slate-700">
             {flag.suggested.object_part || '—'} → {flag.suggested.damage || '—'} →{' '}
@@ -528,14 +698,27 @@ function FlagCard({ flag }: { flag: AIFlag }) {
   );
 }
 
-function Snapshot({ title, body, mono }: { title: string; body?: string; mono?: boolean }) {
+// ─── Shared helpers ───────────────────────────────────────────────────────────
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  };
   return (
-    <div>
-      <div className="text-[10px] font-bold uppercase text-slate-400">{title}</div>
-      <div className={`text-slate-700 mt-0.5 line-clamp-3 ${mono ? 'font-mono' : ''}`}>
-        {body && body.trim() ? body : <span className="italic text-slate-400">—</span>}
-      </div>
-    </div>
+    <button
+      onClick={copy}
+      title="Copy WO number"
+      className="p-0.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition shrink-0"
+    >
+      {copied
+        ? <Icon name="check" className="w-3 h-3 text-green-500" />
+        : <Icon name="copy" className="w-3 h-3" />}
+    </button>
   );
 }
 

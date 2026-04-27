@@ -20,6 +20,62 @@ const RULE_COLOR = '#f59e0b';
 const AI_COLOR = '#6366f1';
 const PIE_COLORS = ['#22c55e', '#f59e0b', '#ef4444', '#94a3b8'];
 
+// ─── Visual cross-filter types ───────────────────────────────────────────────
+
+type VisualSelectionType = 'workCenter' | 'equipment' | 'flagCategory' | 'codeQualitySegment';
+type VisualSelection = { type: VisualSelectionType; value: string } | null;
+
+function buildVisualScopeWhere(
+  sel: VisualSelection,
+  ruleChecks: RuleCheckResult | null,
+): string | null {
+  if (!sel) return null;
+  const esc = (s: string) => s.replace(/'/g, "''");
+  switch (sel.type) {
+    case 'workCenter':
+      return `work_center = '${esc(sel.value)}'`;
+    case 'equipment':
+      return `(equipment_description = '${esc(sel.value)}' OR equipment = '${esc(sel.value)}')`;
+    case 'flagCategory': {
+      const isAI = Object.keys(FLAG_CATEGORY_LABELS).includes(sel.value);
+      if (isAI) {
+        return `work_order_number IN (SELECT wo_number FROM ai_flags WHERE category = '${esc(sel.value)}')`;
+      }
+      if (!ruleChecks) return 'FALSE';
+      const wos = ruleChecks.flaggedWOs
+        .filter((f) => f.checks.includes(sel.value as RuleCheckId))
+        .map((f) => `'${esc(f.wo)}'`);
+      if (wos.length === 0) return 'FALSE';
+      return `work_order_number IN (${wos.join(',')})`;
+    }
+    case 'codeQualitySegment': {
+      const p = `UPPER(TRIM(COALESCE(object_part_code_description,'')))`;
+      const d = `UPPER(TRIM(COALESCE(damage_code_description,'')))`;
+      const c = `UPPER(TRIM(COALESCE(cause_code_description,'')))`;
+      switch (sel.value) {
+        case 'Valid':
+          return `${p}<>'' AND ${d}<>'' AND ${c}<>'' AND ${p} NOT LIKE 'NOT LISTED%' AND ${d} NOT LIKE 'NOT LISTED%' AND ${c} NOT LIKE 'NOT LISTED%'`;
+        case 'Not Listed':
+          return `(${p} LIKE 'NOT LISTED%' OR ${d} LIKE 'NOT LISTED%' OR ${c} LIKE 'NOT LISTED%')`;
+        case 'Missing':
+          return `${p}='' AND ${d}='' AND ${c}=''`;
+        case 'Invalid Hierarchy':
+          return `NOT (${p}<>'' AND ${d}<>'' AND ${c}<>'' AND ${p} NOT LIKE 'NOT LISTED%' AND ${d} NOT LIKE 'NOT LISTED%' AND ${c} NOT LIKE 'NOT LISTED%') AND NOT (${p} LIKE 'NOT LISTED%' OR ${d} LIKE 'NOT LISTED%' OR ${c} LIKE 'NOT LISTED%') AND NOT (${p}='' AND ${d}='' AND ${c}='')`;
+        default:
+          return null;
+      }
+    }
+  }
+}
+
+// Opacity for a chart item — full if it's the selected item or no selection, dimmed otherwise
+function itemOpacity(sel: VisualSelection, type: VisualSelectionType, value: string): number {
+  if (!sel || sel.type !== type) return 1;
+  return sel.value === value ? 1 : 0.25;
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────
+
 export default function AuditDashboard() {
   const run = useActiveRun();
   const project = useActiveProject();
@@ -42,12 +98,21 @@ export default function AuditDashboard() {
     invalidHierarchy: number;
     missing: number;
   } | null>(null);
+
+  // Visual cross-filter state
+  const [visualSelection, setVisualSelection] = useState<VisualSelection>(null);
+
   const cancelRef = useRef({ current: false });
   const [aiProgress, setAIProgress] = useState({ done: 0, total: 0 });
 
   useEffect(() => {
     if (run?.analysisFilters) setFilters(run.analysisFilters);
   }, [run?.id]);
+
+  // Reset visual selection when run or filters change
+  useEffect(() => {
+    setVisualSelection(null);
+  }, [run?.id, run?.lastAnalysedAt]);
 
   // Load base (unfiltered) options once when data is in DB
   useEffect(() => {
@@ -72,33 +137,67 @@ export default function AuditDashboard() {
     return () => clearTimeout(t);
   }, [filters, run?.hasDataInDB, run?.id, baseFilterOptions, project]);
 
+  // ── Chart data loading (re-runs on visual selection change) ─────────────────
   useEffect(() => {
     if (!run?.hasDataInDB) return;
     void (async () => {
+      const ruleChecks = run.ruleChecks ?? null;
+      const visualWhere = buildVisualScopeWhere(visualSelection, ruleChecks);
+      const isEqSource = visualSelection?.type === 'equipment';
+      const isWCSource = visualSelection?.type === 'workCenter';
+      const isCQSource = visualSelection?.type === 'codeQualitySegment';
+
+      // Top Equipment — re-query unless equipment is the source
       try {
-        const rows = await query(`
-          SELECT equipment, COUNT(*) AS cnt
-          FROM ai_flags
-          WHERE equipment IS NOT NULL AND TRIM(equipment) <> ''
-          GROUP BY equipment
-          ORDER BY cnt DESC
-          LIMIT 10
-        `);
+        let sql: string;
+        if (isEqSource) {
+          // Source: keep all equipment data, just apply highlighting in UI
+          sql = `
+            SELECT equipment, COUNT(*) AS cnt
+            FROM ai_flags
+            WHERE equipment IS NOT NULL AND TRIM(equipment) <> ''
+            GROUP BY equipment
+            ORDER BY cnt DESC
+            LIMIT 10
+          `;
+        } else if (visualWhere) {
+          sql = `
+            SELECT a.equipment, COUNT(*) AS cnt
+            FROM ai_flags a
+            WHERE a.equipment IS NOT NULL AND TRIM(a.equipment) <> ''
+              AND a.wo_number IN (SELECT work_order_number FROM v_analysis_scope WHERE ${visualWhere})
+            GROUP BY a.equipment
+            ORDER BY cnt DESC
+            LIMIT 10
+          `;
+        } else {
+          sql = `
+            SELECT equipment, COUNT(*) AS cnt
+            FROM ai_flags
+            WHERE equipment IS NOT NULL AND TRIM(equipment) <> ''
+            GROUP BY equipment
+            ORDER BY cnt DESC
+            LIMIT 10
+          `;
+        }
+        const rows = await query(sql);
         setTopEquipment(rows.map((r) => ({ equipment: String(r.equipment ?? ''), count: Number(r.cnt ?? 0) })));
       } catch {
         setTopEquipment([]);
       }
 
+      // Per Work Center — re-query unless work center is the source
       try {
-        if (run.columnMap.work_center) {
+        if (!run.columnMap?.work_center) {
+          setPerWorkCenter([]);
+        } else if (isWCSource) {
+          // Source: keep all work center bars, highlighting handled in UI
           const rows = await query(`
             WITH base AS (
               SELECT work_center, work_order_number FROM v_analysis_scope
               WHERE work_center IS NOT NULL AND TRIM(work_center) <> ''
             ),
-            flagged_wos AS (
-              SELECT DISTINCT wo_number FROM ai_flags
-            )
+            flagged_wos AS (SELECT DISTINCT wo_number FROM ai_flags)
             SELECT base.work_center AS wc,
                    COUNT(*) AS total,
                    COUNT(*) FILTER (WHERE base.work_order_number IN (SELECT wo_number FROM flagged_wos)) AS flagged
@@ -113,44 +212,88 @@ export default function AuditDashboard() {
             flagged: Number(r.flagged ?? 0),
           })));
         } else {
-          setPerWorkCenter([]);
+          const whereClause = visualWhere ? `AND ${visualWhere}` : '';
+          const rows = await query(`
+            WITH base AS (
+              SELECT work_center, work_order_number FROM v_analysis_scope
+              WHERE work_center IS NOT NULL AND TRIM(work_center) <> ''
+              ${whereClause}
+            ),
+            flagged_wos AS (SELECT DISTINCT wo_number FROM ai_flags)
+            SELECT base.work_center AS wc,
+                   COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE base.work_order_number IN (SELECT wo_number FROM flagged_wos)) AS flagged
+            FROM base
+            GROUP BY base.work_center
+            ORDER BY total DESC
+            LIMIT 10
+          `);
+          setPerWorkCenter(rows.map((r) => ({
+            workCenter: String(r.wc ?? ''),
+            total: Number(r.total ?? 0),
+            flagged: Number(r.flagged ?? 0),
+          })));
         }
       } catch {
         setPerWorkCenter([]);
       }
 
+      // Code Quality — re-query unless code quality is the source
       try {
-        const hasParts = !!run.columnMap.object_part_code_description;
+        const hasParts = !!run.columnMap?.object_part_code_description;
         if (!hasParts) {
           setCodeQuality(null);
-          return;
-        }
-        const [r] = await query(`
-          WITH per AS (
+        } else if (isCQSource) {
+          // Source: keep all segments
+          const [r] = await query(`
+            WITH per AS (
+              SELECT
+                UPPER(TRIM(COALESCE(object_part_code_description,''))) AS p,
+                UPPER(TRIM(COALESCE(damage_code_description,''))) AS d,
+                UPPER(TRIM(COALESCE(cause_code_description,''))) AS c
+              FROM v_analysis_scope
+            )
             SELECT
-              UPPER(TRIM(COALESCE(object_part_code_description,''))) AS p,
-              UPPER(TRIM(COALESCE(damage_code_description,''))) AS d,
-              UPPER(TRIM(COALESCE(cause_code_description,''))) AS c
-            FROM v_analysis_scope
-          )
-          SELECT
-            COUNT(*) FILTER (WHERE p <> '' AND d <> '' AND c <> '' AND p NOT LIKE 'NOT LISTED%' AND d NOT LIKE 'NOT LISTED%' AND c NOT LIKE 'NOT LISTED%') AS valid,
-            COUNT(*) FILTER (WHERE p LIKE 'NOT LISTED%' OR d LIKE 'NOT LISTED%' OR c LIKE 'NOT LISTED%') AS not_listed,
-            COUNT(*) FILTER (WHERE p = '' AND d = '' AND c = '') AS missing,
-            COUNT(*) AS total
-          FROM per
-        `);
-        const valid = Number(r?.valid ?? 0);
-        const notListed = Number(r?.not_listed ?? 0);
-        const missing = Number(r?.missing ?? 0);
-        const total = Number(r?.total ?? 0);
-        const invalidHierarchy = Math.max(0, total - valid - notListed - missing);
-        setCodeQuality({ valid, notListed, invalidHierarchy, missing });
+              COUNT(*) FILTER (WHERE p <> '' AND d <> '' AND c <> '' AND p NOT LIKE 'NOT LISTED%' AND d NOT LIKE 'NOT LISTED%' AND c NOT LIKE 'NOT LISTED%') AS valid,
+              COUNT(*) FILTER (WHERE p LIKE 'NOT LISTED%' OR d LIKE 'NOT LISTED%' OR c LIKE 'NOT LISTED%') AS not_listed,
+              COUNT(*) FILTER (WHERE p = '' AND d = '' AND c = '') AS missing,
+              COUNT(*) AS total
+            FROM per
+          `);
+          const valid = Number(r?.valid ?? 0);
+          const notListed = Number(r?.not_listed ?? 0);
+          const missing = Number(r?.missing ?? 0);
+          const total = Number(r?.total ?? 0);
+          setCodeQuality({ valid, notListed, invalidHierarchy: Math.max(0, total - valid - notListed - missing), missing });
+        } else {
+          const scopeFilter = visualWhere ? `WHERE ${visualWhere}` : '';
+          const [r] = await query(`
+            WITH per AS (
+              SELECT
+                UPPER(TRIM(COALESCE(object_part_code_description,''))) AS p,
+                UPPER(TRIM(COALESCE(damage_code_description,''))) AS d,
+                UPPER(TRIM(COALESCE(cause_code_description,''))) AS c
+              FROM v_analysis_scope
+              ${scopeFilter}
+            )
+            SELECT
+              COUNT(*) FILTER (WHERE p <> '' AND d <> '' AND c <> '' AND p NOT LIKE 'NOT LISTED%' AND d NOT LIKE 'NOT LISTED%' AND c NOT LIKE 'NOT LISTED%') AS valid,
+              COUNT(*) FILTER (WHERE p LIKE 'NOT LISTED%' OR d LIKE 'NOT LISTED%' OR c LIKE 'NOT LISTED%') AS not_listed,
+              COUNT(*) FILTER (WHERE p = '' AND d = '' AND c = '') AS missing,
+              COUNT(*) AS total
+            FROM per
+          `);
+          const valid = Number(r?.valid ?? 0);
+          const notListed = Number(r?.not_listed ?? 0);
+          const missing = Number(r?.missing ?? 0);
+          const total = Number(r?.total ?? 0);
+          setCodeQuality({ valid, notListed, invalidHierarchy: Math.max(0, total - valid - notListed - missing), missing });
+        }
       } catch {
         setCodeQuality(null);
       }
     })();
-  }, [run?.id, run?.hasDataInDB, run?.lastAnalysedAt]);
+  }, [run?.id, run?.hasDataInDB, run?.lastAnalysedAt, visualSelection]);
 
   if (!run) {
     return <div className="flex items-center justify-center h-full text-slate-400 text-sm">No active run.</div>;
@@ -166,6 +309,12 @@ export default function AuditDashboard() {
       </div>
     );
   }
+
+  const handleVisualClick = (type: VisualSelectionType, value: string) => {
+    setVisualSelection((prev) =>
+      prev?.type === type && prev?.value === value ? null : { type, value }
+    );
+  };
 
   const rerun = async () => {
     setIsRerunning(true);
@@ -211,6 +360,15 @@ export default function AuditDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {visualSelection && (
+            <button
+              onClick={() => setVisualSelection(null)}
+              className="px-3 py-1.5 text-xs font-bold rounded border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1.5"
+            >
+              <Icon name="x" className="w-3.5 h-3.5" />
+              Clear visual filter
+            </button>
+          )}
           {projectRuns.length > 1 && (
             <button
               onClick={() => setScreen('comparison')}
@@ -230,36 +388,94 @@ export default function AuditDashboard() {
         </div>
       </div>
 
+      {visualSelection && (
+        <div className="text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded px-3 py-2">
+          Filtered by <strong>{visualSelection.type === 'workCenter' ? 'Work Center' : visualSelection.type === 'equipment' ? 'Equipment' : visualSelection.type === 'codeQualitySegment' ? 'Code Quality' : 'Flag Category'}</strong>: {visualSelection.value} — charts are showing data within this selection.
+        </div>
+      )}
+
       <SummaryRow ruleChecks={run.ruleChecks} aiFlagSummary={run.aiFlagSummary} />
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <ChartCard title="Error Distribution" subtitle="Counts per category — both rule-based and AI-detected">
-          <ErrorDistribution ruleChecks={run.ruleChecks} ai={run.aiFlagSummary} />
+        <ChartCard
+          title="Error Distribution"
+          subtitle="Counts per category — both rule-based and AI-detected"
+          hint={visualSelection?.type === 'flagCategory' ? `Filtered: ${visualSelection.value}` : undefined}
+        >
+          <ErrorDistribution
+            ruleChecks={run.ruleChecks}
+            ai={run.aiFlagSummary}
+            visualSelection={visualSelection}
+            onSelect={(key) => handleVisualClick('flagCategory', key)}
+          />
         </ChartCard>
-        <ChartCard title="Code Quality Breakdown" subtitle="State of the Object/Damage/Cause description fields">
-          <CodeQualityDonut data={codeQuality} />
+        <ChartCard
+          title="Code Quality Breakdown"
+          subtitle="State of the Object/Damage/Cause description fields"
+          hint={visualSelection?.type === 'codeQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
+        >
+          <CodeQualityDonut
+            data={codeQuality}
+            visualSelection={visualSelection}
+            onSelect={(name) => handleVisualClick('codeQualitySegment', name)}
+          />
         </ChartCard>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <ChartCard title="Per Work Center" subtitle="Total WOs vs flagged">
+        <ChartCard
+          title="Per Work Center"
+          subtitle="Total WOs vs flagged"
+          hint={visualSelection?.type === 'workCenter' ? `Filtered: ${visualSelection.value}` : undefined}
+        >
           {perWorkCenter.length === 0 ? (
             <Empty />
           ) : (
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={perWorkCenter}>
+              <BarChart
+                data={perWorkCenter}
+                style={{ cursor: 'pointer' }}
+                onClick={(data) => {
+                  const wc = data?.activePayload?.[0]?.payload?.workCenter;
+                  if (wc) handleVisualClick('workCenter', wc);
+                }}
+              >
                 <XAxis dataKey="workCenter" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="total" fill="#94a3b8" name="Total" />
-                <Bar dataKey="flagged" fill={AI_COLOR} name="Flagged" />
+                <Bar dataKey="total" name="Total">
+                  {perWorkCenter.map((d, i) => (
+                    <Cell
+                      key={i}
+                      fill="#94a3b8"
+                      fillOpacity={itemOpacity(visualSelection, 'workCenter', d.workCenter)}
+                    />
+                  ))}
+                </Bar>
+                <Bar dataKey="flagged" name="Flagged">
+                  {perWorkCenter.map((d, i) => (
+                    <Cell
+                      key={i}
+                      fill={AI_COLOR}
+                      fillOpacity={itemOpacity(visualSelection, 'workCenter', d.workCenter)}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
-        <ChartCard title="Top Problem Equipment" subtitle="Equipment with the most AI-detected flags">
-          <TopEquipmentTable rows={topEquipment} />
+        <ChartCard
+          title="Top Problem Equipment"
+          subtitle="Equipment with the most AI-detected flags"
+          hint={visualSelection?.type === 'equipment' ? `Filtered: ${visualSelection.value}` : undefined}
+        >
+          <TopEquipmentTable
+            rows={topEquipment}
+            visualSelection={visualSelection}
+            onSelect={(eq) => handleVisualClick('equipment', eq)}
+          />
         </ChartCard>
       </div>
 
@@ -330,16 +546,27 @@ function Stat({ label, value, accent }: { label: string; value: number; accent: 
 function ChartCard({
   title,
   subtitle,
+  hint,
   children,
 }: {
   title: string;
   subtitle?: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="bg-white border border-slate-200 rounded shadow-sm p-4 animate-enter">
-      <div className="font-bold text-slate-700 text-sm">{title}</div>
-      {subtitle && <div className="text-xs text-slate-400 mt-0.5">{subtitle}</div>}
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="font-bold text-slate-700 text-sm">{title}</div>
+          {subtitle && <div className="text-xs text-slate-400 mt-0.5">{subtitle}</div>}
+        </div>
+        {hint && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600 shrink-0">
+            {hint}
+          </span>
+        )}
+      </div>
       <div className="mt-4">{children}</div>
     </div>
   );
@@ -348,12 +575,17 @@ function ChartCard({
 function ErrorDistribution({
   ruleChecks,
   ai,
+  visualSelection,
+  onSelect,
 }: {
   ruleChecks: RuleCheckResult;
   ai: AIFlagSummary | null;
+  visualSelection: VisualSelection;
+  onSelect: (key: string) => void;
 }) {
   const ruleData = (Object.keys(RULE_CHECK_LABELS) as RuleCheckId[])
     .map((id) => ({
+      key: id,
       label: RULE_CHECK_LABELS[id].label,
       value: ruleChecks.perCheck[id]?.matched ?? 0,
       type: 'Rule' as const,
@@ -363,6 +595,7 @@ function ErrorDistribution({
   const aiData = ai
     ? (Object.keys(FLAG_CATEGORY_LABELS) as FlagCategory[])
         .map((c) => ({
+          key: c,
           label: FLAG_CATEGORY_LABELS[c],
           value: ai.byCategory[c] ?? 0,
           type: 'AI' as const,
@@ -375,13 +608,27 @@ function ErrorDistribution({
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={data} layout="vertical" margin={{ left: 24 }}>
+      <BarChart
+        data={data}
+        layout="vertical"
+        margin={{ left: 24 }}
+        style={{ cursor: 'pointer' }}
+        onClick={(chartData) => {
+          const key = chartData?.activePayload?.[0]?.payload?.key;
+          if (key) onSelect(key);
+        }}
+      >
         <XAxis type="number" tick={{ fontSize: 10 }} />
         <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={200} />
         <Tooltip />
         <Bar dataKey="value">
           {data.map((d, i) => (
-            <Cell key={i} fill={d.type === 'Rule' ? RULE_COLOR : AI_COLOR} />
+            <Cell
+              key={i}
+              fill={d.type === 'Rule' ? RULE_COLOR : AI_COLOR}
+              fillOpacity={itemOpacity(visualSelection, 'flagCategory', d.key)}
+              style={{ cursor: 'pointer' }}
+            />
           ))}
         </Bar>
       </BarChart>
@@ -391,8 +638,12 @@ function ErrorDistribution({
 
 function CodeQualityDonut({
   data,
+  visualSelection,
+  onSelect,
 }: {
   data: { valid: number; notListed: number; invalidHierarchy: number; missing: number } | null;
+  visualSelection: VisualSelection;
+  onSelect: (name: string) => void;
 }) {
   if (!data) return <Empty />;
   const rows = [
@@ -404,10 +655,23 @@ function CodeQualityDonut({
   if (rows.length === 0) return <Empty />;
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <PieChart>
-        <Pie data={rows} dataKey="value" nameKey="name" innerRadius={60} outerRadius={90} paddingAngle={2}>
-          {rows.map((_, i) => (
-            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+      <PieChart style={{ cursor: 'pointer' }}>
+        <Pie
+          data={rows}
+          dataKey="value"
+          nameKey="name"
+          innerRadius={60}
+          outerRadius={90}
+          paddingAngle={2}
+          onClick={(entry) => onSelect(entry.name)}
+        >
+          {rows.map((r, i) => (
+            <Cell
+              key={i}
+              fill={PIE_COLORS[i % PIE_COLORS.length]}
+              fillOpacity={itemOpacity(visualSelection, 'codeQualitySegment', r.name)}
+              style={{ cursor: 'pointer' }}
+            />
           ))}
         </Pie>
         <Tooltip />
@@ -417,26 +681,45 @@ function CodeQualityDonut({
   );
 }
 
-function TopEquipmentTable({ rows }: { rows: Array<{ equipment: string; count: number }> }) {
+function TopEquipmentTable({
+  rows,
+  visualSelection,
+  onSelect,
+}: {
+  rows: Array<{ equipment: string; count: number }>;
+  visualSelection: VisualSelection;
+  onSelect: (equipment: string) => void;
+}) {
   if (rows.length === 0) return <Empty />;
   const max = Math.max(...rows.map((r) => r.count));
   return (
     <div className="space-y-1.5">
-      {rows.map((r, i) => (
-        <div key={i} className="flex items-center gap-3 text-xs">
-          <div className="font-mono text-slate-500 w-6 text-right">{i + 1}</div>
-          <div className="flex-1 min-w-0">
-            <div className="font-mono truncate text-slate-700">{r.equipment}</div>
-            <div className="h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
-              <div
-                className="h-full bg-indigo-500 rounded-full"
-                style={{ width: `${(r.count / max) * 100}%` }}
-              />
+      {rows.map((r, i) => {
+        const opacity = itemOpacity(visualSelection, 'equipment', r.equipment);
+        const isSelected = visualSelection?.type === 'equipment' && visualSelection.value === r.equipment;
+        return (
+          <div
+            key={i}
+            onClick={() => onSelect(r.equipment)}
+            style={{ opacity }}
+            className={`flex items-center gap-3 text-xs cursor-pointer rounded px-1 py-0.5 transition hover:bg-slate-50 ${
+              isSelected ? 'bg-indigo-50 ring-1 ring-indigo-200' : ''
+            }`}
+          >
+            <div className="font-mono text-slate-500 w-6 text-right">{i + 1}</div>
+            <div className="flex-1 min-w-0">
+              <div className="font-mono truncate text-slate-700">{r.equipment}</div>
+              <div className="h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
+                <div
+                  className="h-full bg-indigo-500 rounded-full"
+                  style={{ width: `${(r.count / max) * 100}%` }}
+                />
+              </div>
             </div>
+            <div className="font-mono font-bold text-slate-700 w-10 text-right">{r.count}</div>
           </div>
-          <div className="font-mono font-bold text-slate-700 w-10 text-right">{r.count}</div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
