@@ -31,7 +31,7 @@ export const SAP_COLUMN_KEYWORDS: Record<CanonicalColumn, string[]> = {
   ],
   work_center_description: [
     'work_center_description', 'work center description', 'workcenter_description',
-    'workcenter description', 'arbpl_text',
+    'workcenter description', 'arbpl_text', 'notification_work_center_name', 'notification work center name',
   ],
   equipment: [
     'equipment', 'equnr', 'equipment_number', 'equipment number',
@@ -105,6 +105,7 @@ export const IDENTIFIER_COLUMNS: CanonicalColumn[] = [
   'work_order_number',
   'equipment',
   'functional_location',
+  'work_center',
 ];
 
 export const TIMESTAMP_COLUMNS: CanonicalColumn[] = [
@@ -123,6 +124,7 @@ export const TEXT_COLUMNS: CanonicalColumn[] = [
   'confirmation_text',
   'confirmation_long_text',
   'code_group',
+  'work_center_description',
 ];
 
 /** Description-form code columns used for catalog validation and triangle checks. */
