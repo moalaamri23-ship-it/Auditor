@@ -129,14 +129,17 @@ src/
     │                             #   Power BI-style cross-filter visual selection
     │                             #   (click any chart item to filter all other charts);
     │                             #   Top Equipment counts AI+Rule flags combined;
-    │                             #   Overall Quality ring (Valid/Entry Quality/Missing Fields);
+    │                             #   Layout: Error Distribution full-width, then Code Quality
+    │                             #   and Overall Quality rings side-by-side below;
+    │                             #   Clean WOs = totalWOs − |aiSet ∪ ruleSet| (matches Valid ring);
     │                             #   chartCache persists chart data for post-refresh display
     ├── ComparisonView.tsx        # Multi-run comparison charts
     ├── IssueExplorer.tsx         # Audit Scope filter panel (same as Dashboard) +
     │                             #   WO Data tab (full raw table, scope-filtered) +
     │                             #   Rule Flags tab (expandable rows, copyable WO IDs) +
-    │                             #   AI Flags tab (one card per WO; expand to see per-row flags
-    │                             #     with optional "Row N" label for confirmation-row flags)
+    │                             #   AI Flags tab (one card per WO; WO-level fields shown once
+    │                             #     at top of expanded group; per-flag rows show only comment,
+    │                             #     operation desc, confirmation; "Row N" label per row flag)
     ├── FilterPanel.tsx           # Audit Scope filter controls:
     │                             #   Date / Work Center / Catalog / Func. Location / Equipment
     └── SettingsScreen.tsx        # AI provider/model/key config with live model fetching
@@ -176,10 +179,10 @@ Navigation: clicking a project card → `project-home` screen (run list) if runs
 |---|---|
 | `description` | `work_order_description` |
 | `part / damage / cause` | `object_part_code_description`, `damage_code_description`, `cause_code_description` |
-| `confirmations[]` | array of `{ row, conf, conf_long }` — one entry per confirmation row, ordered by `_row_seq` |
+| `confirmations[]` | array of `{ row, conf, conf_long, operationDesc }` — one entry per confirmation row, ordered by `_row_seq` |
 | `catalog_hint` | up to 40 valid tuples from `failure_catalog` for that WO's catalog |
 
-The AI returns an optional `"row"` field in its response to identify which confirmation row has the issue. This is stored as `AIFlag.rowSeq` and displayed as "Row N" in the Issues AI Flags tab.
+The AI returns an optional `"row"` field in its response to identify which confirmation row has the issue. This is stored as `AIFlag.rowSeq` and displayed as "Row N" in the Issues AI Flags tab. `AIFlag.operationDesc` captures the `operation_description` for the flagged row and is stored in the `ai_flags` table (`operation_desc` column).
 
 Six flag categories:
 
@@ -232,7 +235,7 @@ The helper `buildVisualScopeWhere(sel, ruleChecks)` (module-level in `AuditDashb
 
 ### Overall Quality Ring Chart
 
-Displayed beside Code Quality Breakdown. Three mutually exclusive segments that sum to `ruleChecks.totalWOs`:
+Displayed beside Code Quality Breakdown (both in a `lg:grid-cols-2` row below the full-width Error Distribution chart). Three mutually exclusive segments that sum to `ruleChecks.totalWOs`:
 
 | Segment | Definition | Color |
 |---|---|---|
@@ -241,6 +244,8 @@ Displayed beside Code Quality Breakdown. Three mutually exclusive segments that 
 | Missing Fields | WOs with rule flags only (no AI flags) | Amber |
 
 Computed purely from `run.aiFlags` and `run.ruleChecks.flaggedWOs` — no DB query needed. Recomputed when `visualSelection` changes via the `filteredErrorDist` effect.
+
+**Valid = Clean WOs invariant:** The "Valid" count in this ring equals the "Clean WOs" stat card. Both use `totalWOs − |aiSet ∪ ruleSet|` (true union, not max). `SummaryRow` receives `aiFlags: AIFlag[]` to compute the union correctly.
 
 ### Chart Cache (Post-Refresh Display)
 
