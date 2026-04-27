@@ -174,11 +174,24 @@ export default function SettingsScreen() {
             </div>
           )}
 
-          {/* Copilot — info text instead of model selector */}
+          {/* Copilot — Power Automate URL instead of model selector */}
           {localProvider === 'copilot' && (
-            <p className="text-xs text-slate-400">
-              Model selection is managed by Copilot Studio. No model ID is required here.
-            </p>
+            <div className="animate-enter space-y-3">
+              <p className="text-xs text-slate-400">
+                Model selection is managed by Copilot Studio. No model ID is required here.
+              </p>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Copilot Power Automate URL</label>
+                <input
+                  type="url"
+                  value={localPowerAutomateUrl}
+                  onChange={e => { setLocalPowerAutomateUrl(e.target.value); setTestStatus(null); }}
+                  placeholder="https://prod-xx.westus.logic.azure.com/workflows/..."
+                  className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
+                />
+                <p className="mt-1 text-xs text-slate-400 italic">HTTP trigger URL that routes prompts to your Copilot Studio agent.</p>
+              </div>
+            </div>
           )}
 
           {/* Azure — deployment name + endpoint */}
