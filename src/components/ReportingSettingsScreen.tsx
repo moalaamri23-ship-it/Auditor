@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
+import { useStore, useActiveRun } from '../store/useStore';
 import { query } from '../services/DuckDBService';
 import Icon from './Icon';
 
@@ -10,18 +10,23 @@ interface WCInfo {
 
 export default function ReportingSettingsScreen() {
   const { reportingEmails, setReportingEmail, currentScreen } = useStore();
+  const run = useActiveRun();
   const [workCenters, setWorkCenters] = useState<WCInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchWCs() {
       try {
+        const hasWC = !!run?.columnMap?.work_center;
+        const wcCol = hasWC ? 'work_center' : "''";
+        const descCol = run?.columnMap?.work_center_description ? 'work_center_description' : "''";
+
         const queryText = `
-          SELECT work_center, MAX(work_center_description) as description
+          SELECT ${wcCol} as work_center, MAX(${descCol}) as description
           FROM v_wo_primary
-          WHERE work_center IS NOT NULL
-          GROUP BY work_center
-          ORDER BY work_center
+          WHERE ${hasWC ? "TRIM(CAST(work_center AS VARCHAR)) <> ''" : "1=0"}
+          GROUP BY ${wcCol}
+          ORDER BY ${wcCol}
         `;
         const res = await query(queryText);
         const wcs: WCInfo[] = res.map((r: any) => ({
@@ -38,7 +43,7 @@ export default function ReportingSettingsScreen() {
     if (currentScreen === 'reporting-settings') {
       fetchWCs();
     }
-  }, [currentScreen]);
+  }, [currentScreen, run?.columnMap]);
 
   return (
     <div className="max-w-4xl mx-auto p-10 animate-enter">

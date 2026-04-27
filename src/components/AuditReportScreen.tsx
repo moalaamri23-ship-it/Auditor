@@ -63,16 +63,20 @@ export default function AuditReportScreen() {
 
         await createAnalysisScopeView(filters, run.columnMap, project);
 
+        const hasWC = !!run.columnMap.work_center;
+        const wcCol = hasWC ? 'work_center' : "''";
+        const descCol = run.columnMap.work_center_description ? 'work_center_description' : "''";
+
         // Fetch Work Centers in scope
         const rows = await query(`
           SELECT 
-            work_center, 
-            MAX(work_center_description) as description, 
+            ${wcCol} as work_center, 
+            MAX(${descCol}) as description, 
             COUNT(work_order_number) as total_wos,
             list(work_order_number) as wos
           FROM v_analysis_scope
-          WHERE work_center IS NOT NULL
-          GROUP BY work_center
+          WHERE ${hasWC ? "TRIM(CAST(work_center AS VARCHAR)) <> ''" : "1=0"}
+          GROUP BY ${wcCol}
         `);
 
         const data: WorkCenterAuditData[] = rows.map(r => {
