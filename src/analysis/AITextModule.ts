@@ -22,12 +22,14 @@ const VALID_SEVERITIES = new Set(['HIGH', 'MEDIUM', 'LOW']);
 // ─── System prompt ──────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are a SAP PM data quality auditor. You audit maintenance work order records for documentation alignment and reliability-coding discipline.
 
-Each work order has five artefacts:
+Each work order record has:
 1. DESCRIPTION       — what the operator reported (work_order_description).
 2. CODES             — the reliability classification: object_part, damage_code, cause_code (description form). The failure_catalog defines which codes are valid.
-3. CONFIRMATION      — short confirmation text the technician wrote when closing the work order.
-4. CONFIRMATION_LONG — the detailed narrative of the confirmation (the long text version of CONFIRMATION).
-5. CATALOG_HINT      — for the equipment's failure catalog group, the valid (object_part → damage → cause) tuples. Use this to detect "False Not Listed".
+3. CATALOG_HINT      — for the equipment's failure catalog group, the valid (object_part → damage → cause) tuples. Use this to detect "False Not Listed".
+4. CONFIRMATIONS     — array of confirmation entries, one per technician closure. Each entry has:
+     row       — row sequence number (1-based)
+     conf      — short confirmation text
+     conf_long — detailed narrative (may be empty if the short text is sufficient)
 
 Detect inconsistencies and classify them. Use these category ids verbatim:
 
@@ -60,12 +62,18 @@ RULES:
 - Be specific in the comment: quote actual words from the text.
 - Keep the comment under 150 characters.
 - For false_not_listed: if CATALOG_HINT is empty, do NOT raise this flag — there is no reference to compare against.
-- For desc_confirmation_mismatch: consider both CONFIRMATION and CONFIRMATION_LONG before flagging; if CONFIRMATION_LONG resolves the apparent mismatch, do not flag.
+- For desc_confirmation_mismatch and desc_code_confirmation_misalign: evaluate each confirmation row independently — include "row" in the output to identify which confirmation entry is problematic.
+- For generic_confirmation: evaluate each confirmation row independently — include "row" to identify which row is vague. Only flag if BOTH conf and conf_long of that row are vague or uninformative.
 - CRITICAL: Do NOT raise any flag solely because a field is empty/blank or contains "Not Listed". Rule-based pre-checks already handle those patterns. Your role is exclusively to detect quality issues in POPULATED fields — text that is present but misleading, vague, or inconsistent.
 - Return ONLY a JSON array — no prose, no markdown fences. If nothing is wrong return [].
 
 OUTPUT FORMAT — each item:
-{"wo": "WO_NUMBER", "cat": "category_id", "sev": "HIGH|MEDIUM|LOW", "cmt": "specific comment quoting actual text", "suggested": {"part": "...", "damage": "...", "cause": "..."}}
+{"wo": "WO_NUMBER", "cat": "category_id", "sev": "HIGH|MEDIUM|LOW", "cmt": "specific comment quoting actual text"}
+
+For flags specific to one confirmation row (generic_confirmation, desc_confirmation_mismatch, desc_code_confirmation_misalign), add "row": <row_number>:
+{"wo": "WO_NUMBER", "row": 2, "cat": "generic_confirmation", "sev": "MEDIUM", "cmt": "Row 2 conf says only 'done'"}
+
+For WO-level flags (desc_code_conflict, false_not_listed, generic_description) omit "row" entirely.
 
 The "suggested" object is REQUIRED only when cat = "false_not_listed", and the values MUST come from CATALOG_HINT for that WO. Omit the field for other categories.
 
@@ -82,15 +90,15 @@ interface WORecord {
   part: string;
   damage: string;
   cause: string;
-  conf: string;
-  conf_long: string;
   equipment: string;
   catalog_hint: Array<{ part: string; damage: string; cause: string }>;
+  confirmations: Array<{ row: number; conf: string; conf_long: string }>;
 }
 
 // ─── AI response item ───────────────────────────────────────────────────────
 interface AIResponseItem {
   wo: string;
+  row?: number;
   cat: string;
   sev: string;
   cmt: string;
@@ -103,18 +111,16 @@ export interface AITextModuleOptions {
   columnMap: ColumnMap;
   aiConfig: AIConfig;
   catalogAvailable: boolean;
-  /** WO numbers to limit AI to (typically the rule-flagged subset). Empty = all WOs in scope. */
-  scopeWOs?: string[];
   scopeWOCount: number;
   onProgress: (processed: number, total: number) => void;
   cancelRef: { current: boolean };
 }
 
 export async function runAITextModule(opts: AITextModuleOptions): Promise<AIFlagSummary> {
-  const { columnMap, aiConfig, scopeWOCount, onProgress, cancelRef, catalogAvailable, scopeWOs } = opts;
+  const { columnMap, aiConfig, scopeWOCount, onProgress, cancelRef, catalogAvailable } = opts;
 
-  // 1. Build WO record set, limited to scopeWOs if provided
-  const records = await _fetchWORecords(columnMap, catalogAvailable, scopeWOs);
+  // 1. Build WO record set — all rows from audit for WOs in v_analysis_scope
+  const records = await _fetchWORecords(columnMap, catalogAvailable);
 
   // 2. Reset DB flags table
   await createAIFlagsTable();
@@ -165,11 +171,10 @@ export async function runAITextModule(opts: AITextModuleOptions): Promise<AIFlag
   };
 }
 
-// ─── Fetch WO records joined with optional catalog hint ────────────────────
+// ─── Fetch WO records — all rows from audit, grouped by WO ────────────────
 async function _fetchWORecords(
   columnMap: ColumnMap,
   catalogAvailable: boolean,
-  scopeWOs?: string[],
 ): Promise<WORecord[]> {
   if (!columnMap.work_order_number) return [];
 
@@ -178,14 +183,11 @@ async function _fetchWORecords(
   const select = (col: keyof ColumnMap, alias: string) =>
     has(col) ? `CAST(${col} AS VARCHAR) AS ${alias}` : `'' AS ${alias}`;
 
-  const woFilter =
-    scopeWOs && scopeWOs.length > 0
-      ? `WHERE work_order_number IN (${scopeWOs.map((w) => `'${w.replace(/'/g, "''")}'`).join(',')})`
-      : '';
-
+  // Fetch all confirmation rows for WOs in scope, ordered by _row_seq
   const rows = await query(`
     SELECT
       CAST(work_order_number AS VARCHAR) AS wo,
+      _row_seq AS row_seq,
       ${select('work_order_description', 'description')},
       ${select('failure_catalog_desc', 'catalog')},
       ${select('object_part_code_description', 'part')},
@@ -194,8 +196,9 @@ async function _fetchWORecords(
       ${select('confirmation_text', 'conf')},
       ${select('confirmation_long_text', 'conf_long')},
       ${select('equipment_description', 'equipment')}
-    FROM v_analysis_scope
-    ${woFilter}
+    FROM audit
+    WHERE work_order_number IN (SELECT work_order_number FROM v_analysis_scope)
+    ORDER BY work_order_number, _row_seq
   `);
 
   // Build per-catalog hint map (for false_not_listed). Only when catalog table exists
@@ -226,18 +229,33 @@ async function _fetchWORecords(
     }
   }
 
-  return rows.map((r) => ({
-    wo: String(r.wo ?? ''),
-    description: String(r.description ?? ''),
-    catalog: String(r.catalog ?? ''),
-    part: String(r.part ?? ''),
-    damage: String(r.damage ?? ''),
-    cause: String(r.cause ?? ''),
-    conf: String(r.conf ?? ''),
-    conf_long: String(r.conf_long ?? ''),
-    equipment: String(r.equipment ?? ''),
-    catalog_hint: hintByCatalog[String(r.catalog ?? '')] ?? [],
-  }));
+  // Group rows by WO number — one WORecord per WO with all confirmation rows
+  const woMap = new Map<string, WORecord>();
+  for (const r of rows) {
+    const wo = String(r.wo ?? '');
+    if (!wo) continue;
+    if (!woMap.has(wo)) {
+      const catalog = String(r.catalog ?? '');
+      woMap.set(wo, {
+        wo,
+        description: String(r.description ?? ''),
+        catalog,
+        part: String(r.part ?? ''),
+        damage: String(r.damage ?? ''),
+        cause: String(r.cause ?? ''),
+        equipment: String(r.equipment ?? ''),
+        catalog_hint: hintByCatalog[catalog] ?? [],
+        confirmations: [],
+      });
+    }
+    woMap.get(wo)!.confirmations.push({
+      row: Number(r.row_seq ?? 1),
+      conf: String(r.conf ?? ''),
+      conf_long: String(r.conf_long ?? ''),
+    });
+  }
+
+  return Array.from(woMap.values());
 }
 
 async function _processBatch(records: WORecord[], aiConfig: AIConfig): Promise<AIFlag[]> {
@@ -274,10 +292,15 @@ async function _processBatch(records: WORecord[], aiConfig: AIConfig): Promise<A
       rec.part || rec.damage || rec.cause
         ? `Part: ${rec.part || '—'} | Damage: ${rec.damage || '—'} | Cause: ${rec.cause || '—'}`
         : '';
-    const closure = rec.conf || rec.conf_long || '';
+    const rowSeq = typeof ai.row === 'number' ? ai.row : undefined;
+    const confEntry = rowSeq != null
+      ? (rec.confirmations.find((c) => c.row === rowSeq) ?? rec.confirmations[0])
+      : rec.confirmations[0];
+    const closure = confEntry ? (confEntry.conf || confEntry.conf_long || '') : '';
 
     const flag: AIFlag = {
       woNumber: wo,
+      rowSeq,
       category: cat as FlagCategory,
       severity: sev as AIFlag['severity'],
       comment: String(ai.cmt ?? '').slice(0, 300),

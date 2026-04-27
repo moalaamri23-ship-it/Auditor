@@ -258,6 +258,7 @@ export type FlagCategory =
 
 export interface AIFlag {
   woNumber: string;
+  rowSeq?: number;       // confirmation row (1-based); undefined = WO-level flag
   category: FlagCategory;
   severity: 'HIGH' | 'MEDIUM' | 'LOW';
   comment: string;

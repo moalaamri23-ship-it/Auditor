@@ -644,6 +644,7 @@ export async function createAIFlagsTable(): Promise<void> {
   await _conn.query(`
     CREATE OR REPLACE TABLE ai_flags (
       wo_number     VARCHAR,
+      row_seq       INTEGER,
       category      VARCHAR,
       severity      VARCHAR,
       comment       VARCHAR,
@@ -663,7 +664,7 @@ export async function insertAIFlagsBatch(flags: AIFlag[]): Promise<void> {
   const rows = flags
     .map(
       (f) =>
-        `('${esc(f.woNumber)}','${esc(f.category)}','${esc(f.severity)}','${esc(f.comment)}','${esc(
+        `('${esc(f.woNumber)}',${f.rowSeq ?? 'NULL'},'${esc(f.category)}','${esc(f.severity)}','${esc(f.comment)}','${esc(
           f.description ?? ''
         )}','${esc(f.codes ?? '')}','${esc(f.closure ?? '')}','${esc(f.equipment ?? '')}','${esc(
           f.suggested?.object_part ?? ''
@@ -671,7 +672,7 @@ export async function insertAIFlagsBatch(flags: AIFlag[]): Promise<void> {
     )
     .join(',\n');
   await _conn.query(`
-    INSERT INTO ai_flags (wo_number, category, severity, comment, description, codes, closure, equipment, sugg_part, sugg_damage, sugg_cause)
+    INSERT INTO ai_flags (wo_number, row_seq, category, severity, comment, description, codes, closure, equipment, sugg_part, sugg_damage, sugg_cause)
     VALUES ${rows}
   `);
 }
@@ -683,9 +684,10 @@ export async function restoreAIFlagsFromRun(flags: AIFlag[]): Promise<void> {
 
 export async function queryAIFlags(category?: string): Promise<AIFlag[]> {
   const where = category ? `WHERE category = '${esc(category)}'` : '';
-  const rows = await _q(`SELECT * FROM ai_flags ${where} ORDER BY severity DESC, wo_number`);
+  const rows = await _q(`SELECT * FROM ai_flags ${where} ORDER BY severity DESC, wo_number, row_seq`);
   return rows.map((r) => ({
     woNumber: String(r.wo_number ?? ''),
+    rowSeq: r.row_seq != null ? Number(r.row_seq) : undefined,
     category: String(r.category ?? '') as AIFlag['category'],
     severity: String(r.severity ?? '') as AIFlag['severity'],
     comment: String(r.comment ?? ''),

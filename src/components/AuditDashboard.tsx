@@ -832,7 +832,7 @@ export default function AuditDashboard() {
         {error && <div className="text-xs text-red-600">{error}</div>}
         {isRerunning && aiProgress.total > 0 && (
           <span className="text-xs text-slate-500 font-mono">
-            AI {aiProgress.done}/{aiProgress.total}
+            AI {aiProgress.done}/{aiProgress.total} WOs
           </span>
         )}
       </div>

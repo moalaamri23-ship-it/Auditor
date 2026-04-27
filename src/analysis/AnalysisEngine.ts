@@ -65,14 +65,11 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineOut
 
   if (aiEnabled) {
     try {
-      const flaggedSet = new Set(ruleChecks.flaggedWOs.map((f) => f.wo));
-      const scopeWOs = flaggedSet.size > 0 ? Array.from(flaggedSet) : undefined;
       aiFlagSummary = await runAITextModule({
         runId,
         columnMap,
         aiConfig,
         catalogAvailable,
-        scopeWOs,
         scopeWOCount,
         onProgress: onAIProgress ?? (() => {}),
         cancelRef,

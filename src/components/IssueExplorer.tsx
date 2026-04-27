@@ -550,27 +550,39 @@ function WODetailPanel({ detail }: { detail: WODetail }) {
 
 function AIFlagsTab({ flags }: { flags: AIFlag[] }) {
   const [filter, setFilter] = useState<FlagCategory | 'ALL'>('ALL');
-  const [expandedIdxs, setExpandedIdxs] = useState<Set<number>>(new Set());
+  const [expandedWOs, setExpandedWOs] = useState<Set<string>>(new Set());
 
   const categories = Object.keys(FLAG_CATEGORY_LABELS) as FlagCategory[];
 
-  // Per-category counts from the scope-filtered flags
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const f of flags) counts[f.category] = (counts[f.category] ?? 0) + 1;
     return counts;
   }, [flags]);
 
-  const displayed = useMemo(() => {
-    if (filter === 'ALL') return flags;
-    return flags.filter((f) => f.category === filter);
+  // Filter by category then group by WO number
+  const woGroups = useMemo(() => {
+    const filtered = filter === 'ALL' ? flags : flags.filter((f) => f.category === filter);
+    const map = new Map<string, AIFlag[]>();
+    for (const f of filtered) {
+      const arr = map.get(f.woNumber) ?? [];
+      arr.push(f);
+      map.set(f.woNumber, arr);
+    }
+    return Array.from(map.entries()).map(([wo, fs]) => ({
+      wo,
+      flags: fs,
+      topSeverity: (fs.some((f) => f.severity === 'HIGH') ? 'HIGH'
+        : fs.some((f) => f.severity === 'MEDIUM') ? 'MEDIUM' : 'LOW') as AIFlag['severity'],
+      equipment: fs[0]?.equipment ?? '',
+    }));
   }, [flags, filter]);
 
-  const toggle = (idx: number) => {
-    setExpandedIdxs((prev) => {
+  const toggleWO = (wo: string) => {
+    setExpandedWOs((prev) => {
       const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
+      if (next.has(wo)) next.delete(wo);
+      else next.add(wo);
       return next;
     });
   };
@@ -583,73 +595,76 @@ function AIFlagsTab({ flags }: { flags: AIFlag[] }) {
           const count = categoryCounts[c] ?? 0;
           if (count === 0) return null;
           return (
-            <FilterChip
-              key={c}
-              active={filter === c}
-              label={FLAG_CATEGORY_LABELS[c]}
-              count={count}
-              onClick={() => setFilter(c)}
-            />
+            <FilterChip key={c} active={filter === c} label={FLAG_CATEGORY_LABELS[c]} count={count} onClick={() => setFilter(c)} />
           );
         })}
       </div>
 
       <div className="bg-white border border-slate-200 rounded shadow-sm">
-        {displayed.length === 0 ? (
+        {woGroups.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-sm">No AI flags match this filter.</div>
         ) : (
           <ul className="divide-y divide-slate-100 max-h-[600px] overflow-auto scroll-thin">
-            {displayed.slice(0, 500).map((f, i) => {
-              const isExpanded = expandedIdxs.has(i);
+            {woGroups.slice(0, 300).map(({ wo, flags: wFlags, topSeverity, equipment }) => {
+              const isExpanded = expandedWOs.has(wo);
               const sevColor =
-                f.severity === 'HIGH'
+                topSeverity === 'HIGH'
                   ? 'bg-red-100 text-red-700'
-                  : f.severity === 'MEDIUM'
+                  : topSeverity === 'MEDIUM'
                     ? 'bg-amber-100 text-amber-700'
                     : 'bg-yellow-100 text-yellow-700';
 
               return (
-                <li key={`${f.woNumber}-${i}`}>
+                <li key={wo}>
                   <button
-                    onClick={() => toggle(i)}
+                    onClick={() => toggleWO(wo)}
                     className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 hover:bg-slate-50 transition"
                   >
-                    <Icon
-                      name={isExpanded ? 'chevronDown' : 'chevronRight'}
-                      className="w-3.5 h-3.5 text-slate-400 shrink-0"
-                    />
-                    <span className="font-mono font-bold text-slate-800 w-32 shrink-0">{f.woNumber}</span>
-                    <CopyButton text={f.woNumber} />
-                    <div className="flex flex-wrap gap-1 flex-1 items-center">
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${sevColor}`}>
-                        {f.severity}
-                      </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                        {FLAG_CATEGORY_LABELS[f.category]}
-                      </span>
-                      {f.equipment && (
-                        <span className="text-[10px] text-slate-400 font-mono truncate max-w-[200px]">
-                          {f.equipment}
-                        </span>
-                      )}
-                    </div>
-                    <Icon
-                      name={isExpanded ? 'chevronUp' : 'chevronDown'}
-                      className="w-3.5 h-3.5 text-slate-300 shrink-0"
-                    />
+                    <Icon name={isExpanded ? 'chevronDown' : 'chevronRight'} className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="font-mono font-bold text-slate-800 w-32 shrink-0">{wo}</span>
+                    <CopyButton text={wo} />
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${sevColor}`}>{topSeverity}</span>
+                    <span className="text-xs text-slate-500">{wFlags.length} flag{wFlags.length !== 1 ? 's' : ''}</span>
+                    {equipment && (
+                      <span className="text-[10px] text-slate-400 font-mono truncate max-w-[200px] ml-auto">{equipment}</span>
+                    )}
+                    <Icon name={isExpanded ? 'chevronUp' : 'chevronDown'} className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                   </button>
 
                   {isExpanded && (
-                    <div className="px-4 pb-3 pt-1 bg-slate-50 border-t border-slate-100 animate-enter">
-                      <AIFlagDetailPanel flag={f} />
+                    <div className="border-t border-slate-100 divide-y divide-slate-100 bg-slate-50 animate-enter">
+                      {wFlags.map((f, i) => {
+                        const fSevColor =
+                          f.severity === 'HIGH'
+                            ? 'bg-red-100 text-red-700'
+                            : f.severity === 'MEDIUM'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-yellow-100 text-yellow-700';
+                        return (
+                          <div key={i} className="px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              {f.rowSeq != null && (
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                                  Row {f.rowSeq}
+                                </span>
+                              )}
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${fSevColor}`}>{f.severity}</span>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                                {FLAG_CATEGORY_LABELS[f.category]}
+                              </span>
+                            </div>
+                            <AIFlagDetailPanel flag={f} />
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </li>
               );
             })}
-            {displayed.length > 500 && (
+            {woGroups.length > 300 && (
               <li className="px-4 py-3 text-xs text-slate-400 italic">
-                … and {displayed.length - 500} more.
+                … and {woGroups.length - 300} more WOs.
               </li>
             )}
           </ul>

@@ -65,15 +65,28 @@ export async function runRuleChecks(opts: RuleCheckOptions): Promise<RuleCheckRe
 
   const woCol = has('work_order_number') ? 'work_order_number' : `'?'`;
 
-  // 1. Missing confirmation
+  // 1. Missing confirmation — flag WOs where ANY row has no confirmation text
   if (has('confirmation_text') || has('confirmation_long_text')) {
     const shortBlank = has('confirmation_text')
-      ? `(confirmation_text IS NULL OR TRIM(confirmation_text) = '')`
+      ? `(confirmation_text IS NULL OR TRIM(CAST(confirmation_text AS VARCHAR)) = '')`
       : `TRUE`;
     const longBlank = has('confirmation_long_text')
-      ? `(confirmation_long_text IS NULL OR TRIM(confirmation_long_text) = '')`
+      ? `(confirmation_long_text IS NULL OR TRIM(CAST(confirmation_long_text AS VARCHAR)) = '')`
       : `TRUE`;
-    await runCheck('missing_confirmation', woCol, `${shortBlank} AND ${longBlank}`);
+    try {
+      const mcRows = await query(`
+        SELECT DISTINCT CAST(${woCol} AS VARCHAR) AS wo
+        FROM audit
+        WHERE work_order_number IN (SELECT work_order_number FROM v_analysis_scope)
+          AND ${shortBlank} AND ${longBlank}
+      `);
+      const mcWOs = mcRows.map((r) => String(r.wo ?? '')).filter(Boolean);
+      perCheck['missing_confirmation'] = { matched: mcWOs.length, sampleWOs: mcWOs.slice(0, 5) };
+      for (const wo of mcWOs) recordFlag(wo, 'missing_confirmation');
+    } catch (err) {
+      console.warn('Rule check missing_confirmation failed', err);
+      perCheck['missing_confirmation'] = { matched: 0, sampleWOs: [] };
+    }
   } else {
     perCheck['missing_confirmation'] = { matched: 0, sampleWOs: [] };
   }

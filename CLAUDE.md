@@ -52,9 +52,9 @@ Four views/tables are created after every load. All analysis queries MUST use th
 |---|---|---|
 | `v_wo_primary` | One row per WO (`_row_seq = 1`) | WO counts, MTBF, MTTR, failure rates, filter options |
 | `v_confirmations` | Rows with non-empty `confirmation_text` | Text analysis, confirmation quality |
-| `audit` | Full typed table (all rows) | Raw exploration (WO Data tab) |
-| `v_analysis_scope` | Filtered subset of `v_wo_primary` | All rule checks and AI analysis |
-| `ai_flags` | Persisted AI flag results | Dashboard charts, Issues AI tab |
+| `audit` | Full typed table (all rows) | Raw exploration (WO Data tab); AI analysis (all confirmation rows); `missing_confirmation` rule check |
+| `v_analysis_scope` | Filtered subset of `v_wo_primary` | WO membership scope (rule checks + AI WO list); aggregations |
+| `ai_flags` | Persisted AI flag results (includes `row_seq` for confirmation-row flags) | Dashboard charts, Issues AI tab |
 
 **Never use `audit` for aggregations if the dataset is `CONFIRMATION_LEVEL` granularity.**
 
@@ -135,7 +135,8 @@ src/
     ├── IssueExplorer.tsx         # Audit Scope filter panel (same as Dashboard) +
     │                             #   WO Data tab (full raw table, scope-filtered) +
     │                             #   Rule Flags tab (expandable rows, copyable WO IDs) +
-    │                             #   AI Flags tab (expandable rows matching Rule Flags style)
+    │                             #   AI Flags tab (one card per WO; expand to see per-row flags
+    │                             #     with optional "Row N" label for confirmation-row flags)
     ├── FilterPanel.tsx           # Audit Scope filter controls:
     │                             #   Date / Work Center / Catalog / Func. Location / Equipment
     └── SettingsScreen.tsx        # AI provider/model/key config with live model fetching
@@ -169,26 +170,27 @@ Navigation: clicking a project card → `project-home` screen (run list) if runs
 
 ### AI Text Module
 
-`AITextModule.ts` evaluates WOs in batches of 20. Fields sent per WO:
+`AITextModule.ts` evaluates ALL WOs in scope in batches of 20. It queries the `audit` table (all rows) for WOs in `v_analysis_scope` and groups confirmation rows per WO. Each `WORecord` sent to AI has:
 
 | Field | SAP column |
 |---|---|
 | `description` | `work_order_description` |
 | `part / damage / cause` | `object_part_code_description`, `damage_code_description`, `cause_code_description` |
-| `conf` | `confirmation_text` |
-| `conf_long` | `confirmation_long_text` |
+| `confirmations[]` | array of `{ row, conf, conf_long }` — one entry per confirmation row, ordered by `_row_seq` |
 | `catalog_hint` | up to 40 valid tuples from `failure_catalog` for that WO's catalog |
+
+The AI returns an optional `"row"` field in its response to identify which confirmation row has the issue. This is stored as `AIFlag.rowSeq` and displayed as "Row N" in the Issues AI Flags tab.
 
 Six flag categories:
 
-| Category | Notes |
-|---|---|
-| `desc_code_conflict` | Description vs codes mismatch — only when both DESCRIPTION and CODES are populated |
-| `false_not_listed` | "Not Listed" codes when catalog has a better match — only fires when `catalog_hint` is non-empty AND description implies a specific catalog entry |
-| `desc_confirmation_mismatch` | Description vs confirmation scope mismatch; `conf_long` checked before flagging; skipped if confirmation is blank |
-| `desc_code_confirmation_misalign` | All three artefacts contradict; skipped if confirmation is blank |
-| `generic_description` | Description is PRESENT but too vague — does NOT fire for empty/blank descriptions (those are caught by rule checks) |
-| `generic_confirmation` | Confirmation is PRESENT but uninformative — does NOT fire for blank confirmations (caught by rule checks); only fires when BOTH `conf` and `conf_long` are vague |
+| Category | Row field | Notes |
+|---|---|---|
+| `desc_code_conflict` | omit | Description vs codes mismatch |
+| `false_not_listed` | omit | "Not Listed" codes when catalog has a better match — only fires when `catalog_hint` is non-empty AND description implies a specific catalog entry |
+| `desc_confirmation_mismatch` | include | Description vs one confirmation row mismatch; skipped if that row is blank |
+| `desc_code_confirmation_misalign` | include | All three artefacts contradict for one confirmation row; skipped if that row is blank |
+| `generic_description` | omit | Description is PRESENT but too vague — does NOT fire for empty/blank descriptions |
+| `generic_confirmation` | include | One confirmation row is PRESENT but uninformative — only fires when BOTH `conf` and `conf_long` of that row are vague |
 
 **AI prompt rule:** The AI must not flag empty fields or bare "Not Listed" codes — those are handled by `RuleChecksModule`. AI flags only populated fields that are misleading, vague, or inconsistent.
 
@@ -198,7 +200,7 @@ Run by `RuleChecksModule.ts` against `v_analysis_scope`:
 
 | Rule | Condition |
 |---|---|
-| `missing_confirmation` | Both `confirmation_text` and `confirmation_long_text` blank |
+| `missing_confirmation` | WO has ANY row in `audit` where both `confirmation_text` and `confirmation_long_text` are blank |
 | `not_listed_codes` | Any code field starts with "Not Listed" — **skipped if `catalogAvailable === false`** |
 | `missing_scoping_text` | `code_group` blank |
 | `catalog_invalid_object_part` | Object part not in catalog for that failure_catalog_desc |
