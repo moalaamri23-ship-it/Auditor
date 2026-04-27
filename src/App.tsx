@@ -12,6 +12,8 @@ import ComparisonView from './components/ComparisonView';
 import IssueExplorer from './components/IssueExplorer';
 import DataViewScreen from './components/DataViewScreen';
 import SettingsScreen from './components/SettingsScreen';
+import ReportingSettingsScreen from './components/ReportingSettingsScreen';
+import AuditReportScreen from './components/AuditReportScreen';
 import { useStore } from './store/useStore';
 import { initDB } from './services/DuckDBService';
 import { ensureCatalogLoaded } from './services/FailureCatalogService';
@@ -101,6 +103,8 @@ export default function App() {
             {currentScreen === 'explorer' && <IssueExplorer />}
             {currentScreen === 'data-view' && <DataViewScreen />}
             {currentScreen === 'settings' && <SettingsScreen />}
+            {currentScreen === 'reporting-settings' && <ReportingSettingsScreen />}
+            {currentScreen === 'audit-report' && <AuditReportScreen />}
           </>
         )}
       </main>

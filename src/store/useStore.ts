@@ -26,6 +26,7 @@ export const useStore = create<AppState>()(
         modelId: 'gemini-2.0-flash',
         powerAutomateUrl: '',
       },
+      reportingEmails: {},
 
       // ── Transient UI state (reset on load) ──────────
       currentScreen: 'projects' as Screen,
@@ -153,6 +154,12 @@ export const useStore = create<AppState>()(
 
       updateAIConfig: (config: Partial<AIConfig>) => {
         set((state) => ({ aiConfig: { ...state.aiConfig, ...config } }));
+      },
+
+      setReportingEmail: (workCenter: string, email: string) => {
+        set((state) => ({
+          reportingEmails: { ...state.reportingEmails, [workCenter]: email },
+        }));
       },
     }),
     {

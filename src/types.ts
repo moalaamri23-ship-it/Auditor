@@ -6,6 +6,7 @@ export type CanonicalColumn =
   | 'notification_date'
   | 'work_order_description'
   | 'work_center'
+  | 'work_center_description'
   | 'equipment'
   | 'equipment_description'
   | 'failure_catalog_desc'
@@ -293,6 +294,8 @@ export type Screen =
   | 'comparison'
   | 'explorer'
   | 'data-view'
+  | 'reporting-settings'
+  | 'audit-report'
   | 'settings';
 
 export interface AppState {
@@ -302,6 +305,7 @@ export interface AppState {
   activeProjectId: string | null;
   activeRunId: string | null;
   aiConfig: AIConfig;
+  reportingEmails: Record<string, string>;
 
   // Transient UI (not persisted)
   currentScreen: Screen;
@@ -329,4 +333,5 @@ export interface AppState {
   setScreen: (screen: Screen) => void;
   setLoading: (loading: boolean, message?: string) => void;
   updateAIConfig: (config: Partial<AIConfig>) => void;
+  setReportingEmail: (workCenter: string, email: string) => void;
 }

@@ -133,11 +133,16 @@ export default function Header({ dbReady }: { dbReady: boolean }) {
               Settings
             </button>
             <button
-              disabled
-              title="Coming soon"
-              className="text-xs font-bold px-3 py-1.5 rounded border flex items-center gap-1.5 whitespace-nowrap bg-slate-800 border-slate-600 text-slate-500 cursor-not-allowed opacity-60"
+              onClick={() => { setScreen('reporting-settings'); setToolbarOpen(false); }}
+              className="text-xs font-bold px-3 py-1.5 rounded border flex items-center gap-1.5 whitespace-nowrap bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 transition"
             >
               Reporting Settings
+            </button>
+            <button
+              onClick={() => { setScreen('audit-report'); setToolbarOpen(false); }}
+              className="text-xs font-bold px-3 py-1.5 rounded border flex items-center gap-1.5 whitespace-nowrap bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 transition"
+            >
+              Audit Report
             </button>
             <button
               onClick={() => { setScreen('data-view'); setToolbarOpen(false); }}

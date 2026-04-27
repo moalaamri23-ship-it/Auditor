@@ -38,8 +38,11 @@ type IconName =
   | 'activity'
   | 'loader'
   | 'checkCircle'
+  | 'checkCircle'
   | 'xCircle'
-  | 'copy';
+  | 'copy'
+  | 'mail'
+  | 'send';
 
 interface IconProps {
   name: IconName;
@@ -263,6 +266,18 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
       <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+    </>
+  ),
+  mail: (
+    <>
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+      <polyline points="22,6 12,13 2,6" />
+    </>
+  ),
+  send: (
+    <>
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
     </>
   ),
 };

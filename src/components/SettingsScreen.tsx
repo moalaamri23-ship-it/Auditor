@@ -207,20 +207,7 @@ export default function SettingsScreen() {
             </div>
           )}
 
-          {/* Copilot — Power Automate URL */}
-          {localProvider === 'copilot' && (
-            <div className="animate-enter">
-              <label className="text-xs font-semibold text-slate-500 mb-1 block">Power Automate URL</label>
-              <input
-                type="url"
-                value={localPowerAutomateUrl}
-                onChange={e => { setLocalPowerAutomateUrl(e.target.value); setTestStatus(null); }}
-                placeholder="https://prod-xx.westus.logic.azure.com/workflows/..."
-                className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
-              />
-              <p className="mt-1 text-xs text-slate-400 italic">HTTP trigger URL from your Power Automate flow. Stored in your browser's local storage only.</p>
-            </div>
-          )}
+
 
           {/* API Key — hidden for Copilot */}
           {localProvider !== 'copilot' && (
@@ -274,6 +261,40 @@ export default function SettingsScreen() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Reporting Integration Section */}
+      <div className="bg-white p-6 rounded border max-w-xl mt-6">
+        <div className="border-b pb-4 mb-6 flex items-center gap-3">
+          <div className="bg-blue-600 p-2 rounded text-white flex items-center justify-center">
+            <Icon name="mail" className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold mb-1">Reporting Integration</h2>
+            <p className="text-xs text-slate-400">Configure Power Automate to send email reports.</p>
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-500 mb-1 block">Power Automate HTTP URL</label>
+            <input
+              type="url"
+              value={localPowerAutomateUrl}
+              onChange={e => { setLocalPowerAutomateUrl(e.target.value); setTestStatus(null); }}
+              placeholder="https://prod-xx.westus.logic.azure.com/workflows/..."
+              className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
+            />
+            <p className="mt-1 text-xs text-slate-400 italic">HTTP trigger URL used to send Audit Reports to Work Center owners.</p>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleSave}
+              className="bg-brand-600 text-white px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-brand-700 transition"
+            >
+              <Icon name="save" className="w-4 h-4" /> Save
+            </button>
+          </div>
+        </div>
       </div>
 
       <FailureCatalogSection />

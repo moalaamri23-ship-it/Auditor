@@ -29,6 +29,10 @@ export const SAP_COLUMN_KEYWORDS: Record<CanonicalColumn, string[]> = {
     'work_center', 'work center', 'workcenter', 'arbpl', 'arbeitsplatz',
     'maint_work_center', 'planner_group', 'planner group',
   ],
+  work_center_description: [
+    'work_center_description', 'work center description', 'workcenter_description',
+    'workcenter description', 'arbpl_text',
+  ],
   equipment: [
     'equipment', 'equnr', 'equipment_number', 'equipment number',
     'equipment_no', 'equipment no', 'asset_number', 'asset number',
@@ -184,6 +188,7 @@ export const COLUMN_LABELS: Record<CanonicalColumn, string> = {
   notification_date:               'Date',
   work_order_description:          'Description',
   work_center:                     'Work Center',
+  work_center_description:         'Work Center Description',
   equipment:                       'Equipment',
   equipment_description:           'Equipment Description',
   failure_catalog_desc:            'Failure Catalog',
