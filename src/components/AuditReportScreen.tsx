@@ -103,7 +103,7 @@ export default function AuditReportScreen() {
       setBaseFilterOptions(opts);
       setFilterOptions(opts);
     }).catch(console.error);
-  }, [run?.id, run?.columnMap]);
+  }, [run?.id, run?.hasDataInDB, run?.columnMap]);
 
   // ── Effect 2: fetch WC list — no hasDataInDB guard (mirrors ReportingSettingsScreen) ──
   useEffect(() => {
@@ -199,8 +199,8 @@ export default function AuditReportScreen() {
   };
 
   const sendEmail = async (wc: WorkCenterAuditData) => {
-    if (!aiConfig.powerAutomateUrl) {
-      alert('Please configure Power Automate URL in Settings first.');
+    if (!aiConfig.reportingWebhookUrl) {
+      alert('Please configure Reporting Integration URL in Settings first.');
       return;
     }
     const emailTo = reportingEmails[wc.workCenter];
@@ -208,7 +208,7 @@ export default function AuditReportScreen() {
 
     setSendingStatus(prev => ({ ...prev, [wc.workCenter]: 'sending' }));
     try {
-      const res = await fetch(aiConfig.powerAutomateUrl, {
+      const res = await fetch(aiConfig.reportingWebhookUrl!, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -233,7 +233,7 @@ export default function AuditReportScreen() {
   return (
     <div className="flex flex-col h-full bg-slate-50">
       {/* ── Top bar ── */}
-      <div className="bg-white border-b shrink-0 px-6 py-4 shadow-sm z-10 relative">
+      <div className="bg-white border-b shrink-0 px-6 py-4 shadow-sm z-20 relative" style={{ overflow: 'visible' }}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -285,7 +285,7 @@ export default function AuditReportScreen() {
             </div>
             <button
               onClick={sendBulk}
-              disabled={selectedWCs.size === 0 || !aiConfig.powerAutomateUrl}
+              disabled={selectedWCs.size === 0 || !aiConfig.reportingWebhookUrl}
               className="px-4 py-1.5 text-sm bg-brand-600 text-white rounded font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center gap-2"
             >
               <Icon name="send" className="w-4 h-4" />
@@ -307,7 +307,7 @@ export default function AuditReportScreen() {
               </div>
             ) : (
               <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold border-b sticky top-0 z-10">
+                <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold border-b sticky top-0 z-[1]">
                   <tr>
                     <th className="px-4 py-2 w-8" />
                     <th className="px-4 py-2">Work Center</th>

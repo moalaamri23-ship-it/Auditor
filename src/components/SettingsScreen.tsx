@@ -38,6 +38,7 @@ export default function SettingsScreen() {
   const [localModelId,   setLocalModelId]   = useState(aiConfig.modelId);
   const [localEndpoint,          setLocalEndpoint]          = useState('');
   const [localPowerAutomateUrl,  setLocalPowerAutomateUrl]  = useState(aiConfig.powerAutomateUrl ?? '');
+  const [localReportingUrl,      setLocalReportingUrl]      = useState(aiConfig.reportingWebhookUrl ?? '');
 
   const [testStatus,  setTestStatus]  = useState<TestStatus>(null);
   const [testMessage, setTestMessage] = useState('');
@@ -279,8 +280,8 @@ export default function SettingsScreen() {
             <label className="text-xs font-semibold text-slate-500 mb-1 block">Power Automate HTTP URL</label>
             <input
               type="url"
-              value={localPowerAutomateUrl}
-              onChange={e => { setLocalPowerAutomateUrl(e.target.value); setTestStatus(null); }}
+              value={localReportingUrl}
+              onChange={e => setLocalReportingUrl(e.target.value)}
               placeholder="https://prod-xx.westus.logic.azure.com/workflows/..."
               className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
             />
@@ -288,7 +289,7 @@ export default function SettingsScreen() {
           </div>
           <div className="flex justify-end">
             <button
-              onClick={handleSave}
+              onClick={() => updateAIConfig({ reportingWebhookUrl: localReportingUrl })}
               className="bg-brand-600 text-white px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-brand-700 transition"
             >
               <Icon name="save" className="w-4 h-4" /> Save

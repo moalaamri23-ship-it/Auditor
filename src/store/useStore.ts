@@ -25,6 +25,7 @@ export const useStore = create<AppState>()(
         apiKey: '',
         modelId: 'gemini-2.0-flash',
         powerAutomateUrl: '',
+        reportingWebhookUrl: '',
       },
       reportingEmails: {},
 
