@@ -98,16 +98,16 @@ export default function AuditReportScreen() {
 
   // ── Effect 1: load filter options on mount ──────────────────────────────────
   useEffect(() => {
-    if (!run?.hasDataInDB || !run.columnMap) return;
+    if (!run?.columnMap) return;
     getFilterOptions(run.columnMap).then((opts) => {
       setBaseFilterOptions(opts);
       setFilterOptions(opts);
     }).catch(console.error);
-  }, [run?.hasDataInDB, run?.id]);
+  }, [run?.id, run?.columnMap]);
 
-  // ── Effect 2: fetch WC list independently (no dependency on baseFilterOptions)
+  // ── Effect 2: fetch WC list — no hasDataInDB guard (mirrors ReportingSettingsScreen) ──
   useEffect(() => {
-    if (!run?.hasDataInDB || !run.columnMap) return;
+    if (!run?.columnMap) return;
 
     const t = setTimeout(async () => {
       setLoadingData(true);
@@ -132,11 +132,11 @@ export default function AuditReportScreen() {
     }, 200);
 
     return () => clearTimeout(t);
-  }, [filters, run?.hasDataInDB, run?.id, run?.aiFlags, run?.ruleChecks]);
+  }, [filters, run?.id, run?.columnMap, run?.aiFlags, run?.ruleChecks]);
 
   // ── Effect 3: cascade filter options when baseFilterOptions is ready ─────────
   useEffect(() => {
-    if (!run?.hasDataInDB || !run.columnMap || !baseFilterOptions) return;
+    if (!run?.columnMap || !baseFilterOptions) return;
 
     const t = setTimeout(async () => {
       try {
@@ -152,7 +152,7 @@ export default function AuditReportScreen() {
     }, 300);
 
     return () => clearTimeout(t);
-  }, [filters, run?.hasDataInDB, run?.id, baseFilterOptions, project]);
+  }, [filters, run?.id, run?.columnMap, baseFilterOptions, project]);
 
   const handleSelectAll = () => {
     if (selectedWCs.size === wcData.length && wcData.length > 0) {
