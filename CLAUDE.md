@@ -58,7 +58,7 @@ Four views/tables are created after every load. All analysis queries MUST use th
 
 **Never use `audit` for aggregations if the dataset is `CONFIRMATION_LEVEL` granularity.**
 
-`v_analysis_scope` is rebuilt by `createAnalysisScopeView()` before every pipeline run and also implicitly used by `getLiveScopeCount()` / `getCascadingFilterOptions()` (which query `v_wo_primary` directly without mutating the view).
+`v_analysis_scope` is rebuilt by `createAnalysisScopeView()` before every pipeline run and also called by `IssueExplorer` when the user adjusts filters on the Issues page. `getLiveScopeCount()` / `getCascadingFilterOptions()` query `v_wo_primary` directly without mutating the view. **Note:** `v_analysis_scope` is shared — navigating between Dashboard and Issues may leave it in the state set by whichever screen last called `createAnalysisScopeView()`; the pipeline always resets it before running.
 
 ### Granularity Classification
 
@@ -125,10 +125,14 @@ src/
     │                             #   cascading filter options, Run Pre-Checks trigger
     ├── PreChecksView.tsx         # Rule check results before AI analysis
     ├── AuditDashboard.tsx        # Summary dashboard: stat cards, charts, re-run,
-    │                             #   live scope count + cascading filters
+    │                             #   live scope count + cascading filters,
+    │                             #   Power BI-style cross-filter visual selection
+    │                             #   (click any chart item to filter all other charts)
     ├── ComparisonView.tsx        # Multi-run comparison charts
-    ├── IssueExplorer.tsx         # WO Data (full raw table) + Rule Flags (expandable rows)
-    │                             #   + AI Flags tabs
+    ├── IssueExplorer.tsx         # Audit Scope filter panel (same as Dashboard) +
+    │                             #   WO Data tab (full raw table, scope-filtered) +
+    │                             #   Rule Flags tab (expandable rows, copyable WO IDs) +
+    │                             #   AI Flags tab (expandable rows matching Rule Flags style)
     ├── FilterPanel.tsx           # Audit Scope filter controls:
     │                             #   Date / Work Center / Catalog / Func. Location / Equipment
     └── SettingsScreen.tsx        # AI provider/model/key config with live model fetching
@@ -158,6 +162,7 @@ Navigation: clicking a project card → `project-home` screen (run list) if runs
 - `getLiveScopeCount()` returns a live WO count for the current filter selection without mutating the view
 - `getCascadingFilterOptions()` re-fetches each option list with all *other* active filters applied (faceted navigation); each component debounces filter changes at 250 ms
 - On new run creation, `SchemaMapper` auto-computes `dateFrom` = previous run's `dateMax + 1 day`; falls back to last `<period>` of new data if no records exist beyond that date
+- **IssueExplorer** maintains its own local filter state (initialized from `run.analysisFilters`). On change it calls `createAnalysisScopeView()` then builds a `scopeWoSet` (`Set<string>`) used to client-side-filter the WO Data rows, Rule Flags list, and AI Flags list. Filters on the Issues page are transient — they do not update `run.analysisFilters` in the store.
 
 ### AI Text Module
 
@@ -198,6 +203,23 @@ Run by `RuleChecksModule.ts` against `v_analysis_scope`:
 
 Catalog checks (last 4) only run when `catalogAvailable === true`.
 
+### Dashboard Cross-Filter (Visual Selection)
+
+`AuditDashboard.tsx` holds a `visualSelection: { type, value } | null` state. Clicking any chart item sets it; clicking the same item again clears it. A "Clear visual filter" button in the header also resets it.
+
+**Selection types and their effect on other charts:**
+
+| Source chart | `type` | Target charts re-query via |
+|---|---|---|
+| Per Work Center bar | `workCenter` | `WHERE work_center = '${value}'` on `v_analysis_scope` |
+| Top Equipment row | `equipment` | `WHERE equipment_description = '${value}'` on `v_analysis_scope` |
+| Error Distribution bar | `flagCategory` | AI: `wo_number IN (SELECT … FROM ai_flags WHERE category = '${value}')` / Rule: in-memory WO list |
+| Code Quality donut slice | `codeQualitySegment` | SQL condition matching the quality bucket (Valid / Not Listed / Missing / Invalid Hierarchy) |
+
+Source charts do not re-query — they show all their items with the selected one at full opacity and the rest dimmed to 25% (`fillOpacity` on Recharts `<Cell>`, `opacity` style on table rows). Target charts re-query in the same `useEffect` that watches `[run?.id, run?.hasDataInDB, run?.lastAnalysedAt, visualSelection]`.
+
+The helper `buildVisualScopeWhere(sel, ruleChecks)` (module-level in `AuditDashboard.tsx`) returns the SQL WHERE string for a given selection, or `null` if no filter applies.
+
 ### AI Settings (ModelSelector)
 
 `ModelSelector.tsx` implements the full skill spec:
@@ -215,5 +237,5 @@ Catalog checks (last 4) only run when `catalogAvailable === true`.
 
 - `slate-900` header, `slate-50` body, `brand-500/600` accent
 - Inter (sans) + JetBrains Mono (mono) fonts
-- Custom `<Icon>` component — no third-party icon lib
+- Custom `<Icon>` component — no third-party icon lib; available icons listed in `IconName` type in `Icon.tsx` (includes `copy`, `check`, `chevronDown/Up/Right/Left`, etc.)
 - `animate-enter`, `scroll-thin` CSS classes defined in `index.html`
