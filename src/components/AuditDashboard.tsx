@@ -72,7 +72,7 @@ function buildVisualScopeWhere(
         case 'Missing':
           return `${p}='' AND ${d}='' AND ${c}=''`;
         case 'Invalid Hierarchy':
-          return `NOT (${p}<>'' AND ${d}<>'' AND ${c}<>'' AND ${p} NOT LIKE 'NOT LISTED%' AND ${d} NOT LIKE 'NOT LISTED%' AND ${c} NOT LIKE 'NOT LISTED%') AND NOT (${p} LIKE 'NOT LISTED%' OR ${d} LIKE 'NOT LISTED%' OR ${c} LIKE 'NOT LISTED%') AND NOT (${p}='' AND ${d}='' AND ${c}='')`;
+          return `work_order_number IN (SELECT wo_number FROM ai_flags WHERE category = 'desc_code_conflict')`;
         default:
           return null;
       }
@@ -119,6 +119,14 @@ async function _computeChartCache(
        WHERE equipment IS NOT NULL AND TRIM(equipment) <> ''
        GROUP BY equipment ORDER BY cnt DESC LIMIT 10`;
 
+  const cacheFlaggedWosCTE = ruleWOsSQL
+    ? `flagged_wos AS (
+        SELECT wo_number FROM ai_flags
+        UNION
+        SELECT work_order_number AS wo_number FROM v_analysis_scope WHERE work_order_number IN (${ruleWOsSQL})
+      )`
+    : `flagged_wos AS (SELECT DISTINCT wo_number FROM ai_flags)`;
+
   let perWorkCenter: ChartCache['perWorkCenter'] = [];
   if (columnMap?.work_center) {
     try {
@@ -127,7 +135,7 @@ async function _computeChartCache(
           SELECT work_center, work_order_number FROM v_analysis_scope
           WHERE work_center IS NOT NULL AND TRIM(work_center) <> ''
         ),
-        flagged_wos AS (SELECT DISTINCT wo_number FROM ai_flags)
+        ${cacheFlaggedWosCTE}
         SELECT base.work_center AS wc,
                COUNT(*) AS total,
                COUNT(*) FILTER (WHERE base.work_order_number IN (SELECT wo_number FROM flagged_wos)) AS flagged
@@ -162,18 +170,17 @@ async function _computeChartCache(
           FROM v_analysis_scope
         )
         SELECT
-          COUNT(*) FILTER (WHERE p <> '' AND d <> '' AND c <> ''
-            AND p NOT LIKE 'NOT LISTED%' AND d NOT LIKE 'NOT LISTED%' AND c NOT LIKE 'NOT LISTED%') AS valid,
           COUNT(*) FILTER (WHERE p LIKE 'NOT LISTED%' OR d LIKE 'NOT LISTED%' OR c LIKE 'NOT LISTED%') AS not_listed,
           COUNT(*) FILTER (WHERE p = '' AND d = '' AND c = '') AS missing,
           COUNT(*) AS total
         FROM per
       `);
-      const valid = Number(r?.valid ?? 0);
       const notListed = Number(r?.not_listed ?? 0);
       const missing = Number(r?.missing ?? 0);
       const total = Number(r?.total ?? 0);
-      codeQuality = { valid, notListed, missing, invalidHierarchy: Math.max(0, total - valid - notListed - missing) };
+      const invalidHierarchy = new Set(aiFlags.filter(f => f.category === 'desc_code_conflict').map(f => f.woNumber)).size;
+      const valid = Math.max(0, total - notListed - missing - invalidHierarchy);
+      codeQuality = { valid, notListed, missing, invalidHierarchy };
     } catch { codeQuality = null; }
   }
 
@@ -303,6 +310,16 @@ export default function AuditDashboard() {
     filteredPerCheck: Partial<Record<RuleCheckId, number>>;
     filteredByCategory: Partial<Record<FlagCategory, number>>;
   } | null>(null);
+  // Visual-selection-filtered stats for stat cards (set when a work center bar is clicked)
+  const [visualStats, setVisualStats] = useState<{
+    totalWOs: number;
+    aiFlagged: number;
+    totalAIFlags: number;
+    cleanWOs: number;
+    filteredAIFlags: AIFlag[];
+    filteredRuleWOs: Array<{ wo: string; checks: RuleCheckId[] }>;
+    filteredByCategory: Partial<Record<FlagCategory, number>>;
+  } | null>(null);
   // Incrementing this triggers chart re-queries after the scope view is rebuilt
   const [scopeVersion, setScopeVersion] = useState(0);
 
@@ -319,6 +336,7 @@ export default function AuditDashboard() {
   // Reset live stats, scope version, and visual selection when run changes or analysis reruns
   useEffect(() => {
     setLiveStats(null);
+    setVisualStats(null);
     setScopeVersion(0);
     setVisualSelection(null);
   }, [run?.id, run?.lastAnalysedAt]);
@@ -477,6 +495,14 @@ export default function AuditDashboard() {
         setTopEquipment([]);
       }
 
+      const liveEffectFlaggedWosCTE = ruleWOsSQL
+        ? `flagged_wos AS (
+            SELECT wo_number FROM ai_flags
+            UNION
+            SELECT work_order_number AS wo_number FROM v_analysis_scope WHERE work_order_number IN (${ruleWOsSQL})
+          )`
+        : `flagged_wos AS (SELECT DISTINCT wo_number FROM ai_flags)`;
+
       // Per Work Center — re-query unless work center is the source
       try {
         if (!run.columnMap?.work_center) {
@@ -488,7 +514,7 @@ export default function AuditDashboard() {
               SELECT work_center, work_order_number FROM v_analysis_scope
               WHERE work_center IS NOT NULL AND TRIM(work_center) <> ''
             ),
-            flagged_wos AS (SELECT DISTINCT wo_number FROM ai_flags)
+            ${liveEffectFlaggedWosCTE}
             SELECT base.work_center AS wc,
                    COUNT(*) AS total,
                    COUNT(*) FILTER (WHERE base.work_order_number IN (SELECT wo_number FROM flagged_wos)) AS flagged
@@ -502,7 +528,32 @@ export default function AuditDashboard() {
             total: Number(r.total ?? 0),
             flagged: Number(r.flagged ?? 0),
           })));
+
+          // Fix 8: compute WC-filtered stats for stat cards
+          try {
+            const wcWORows = await query(
+              `SELECT DISTINCT work_order_number AS wo FROM v_analysis_scope WHERE work_center = '${esc(visualSelection!.value)}'`
+            );
+            const wcWoSet = new Set(wcWORows.map((r) => String(r.wo ?? '')));
+            const wcAIFlags = (run.aiFlags ?? []).filter((f) => wcWoSet.has(f.woNumber));
+            const wcRuleWOs = (liveStats?.filteredRuleWOs ?? ruleChecks?.flaggedWOs ?? []).filter((fw) => wcWoSet.has(fw.wo));
+            const wcAISet = new Set(wcAIFlags.map((f) => f.woNumber));
+            const wcRuleSet = new Set(wcRuleWOs.map((fw) => fw.wo));
+            const wcAllFlagged = new Set([...wcAISet, ...wcRuleSet]);
+            const wcByCategory: Partial<Record<FlagCategory, number>> = {};
+            for (const f of wcAIFlags) wcByCategory[f.category] = (wcByCategory[f.category] ?? 0) + 1;
+            setVisualStats({
+              totalWOs: wcWoSet.size,
+              filteredAIFlags: wcAIFlags,
+              filteredRuleWOs: wcRuleWOs,
+              aiFlagged: wcAISet.size,
+              totalAIFlags: wcAIFlags.length,
+              cleanWOs: Math.max(0, wcWoSet.size - wcAllFlagged.size),
+              filteredByCategory: wcByCategory,
+            });
+          } catch { setVisualStats(null); }
         } else {
+          setVisualStats(null);
           const whereClause = visualWhere ? `AND ${visualWhere}` : '';
           const rows = await query(`
             WITH base AS (
@@ -510,7 +561,7 @@ export default function AuditDashboard() {
               WHERE work_center IS NOT NULL AND TRIM(work_center) <> ''
               ${whereClause}
             ),
-            flagged_wos AS (SELECT DISTINCT wo_number FROM ai_flags)
+            ${liveEffectFlaggedWosCTE}
             SELECT base.work_center AS wc,
                    COUNT(*) AS total,
                    COUNT(*) FILTER (WHERE base.work_order_number IN (SELECT wo_number FROM flagged_wos)) AS flagged
@@ -530,12 +581,13 @@ export default function AuditDashboard() {
       }
 
       // Code Quality — re-query unless code quality is the source
+      // invalidHierarchy = desc_code_conflict AI flags (filtered to the current visual WO set)
       try {
         const hasParts = !!run.columnMap?.object_part_code_description;
         if (!hasParts) {
           setCodeQuality(null);
         } else if (isCQSource) {
-          // Source: keep all segments
+          // Source: keep all segments (unfiltered)
           const [r] = await query(`
             WITH per AS (
               SELECT
@@ -545,17 +597,17 @@ export default function AuditDashboard() {
               FROM v_analysis_scope
             )
             SELECT
-              COUNT(*) FILTER (WHERE p <> '' AND d <> '' AND c <> '' AND p NOT LIKE 'NOT LISTED%' AND d NOT LIKE 'NOT LISTED%' AND c NOT LIKE 'NOT LISTED%') AS valid,
               COUNT(*) FILTER (WHERE p LIKE 'NOT LISTED%' OR d LIKE 'NOT LISTED%' OR c LIKE 'NOT LISTED%') AS not_listed,
               COUNT(*) FILTER (WHERE p = '' AND d = '' AND c = '') AS missing,
               COUNT(*) AS total
             FROM per
           `);
-          const valid = Number(r?.valid ?? 0);
           const notListed = Number(r?.not_listed ?? 0);
           const missing = Number(r?.missing ?? 0);
           const total = Number(r?.total ?? 0);
-          setCodeQuality({ valid, notListed, invalidHierarchy: Math.max(0, total - valid - notListed - missing), missing });
+          const sourceAIFlags = liveStats?.filteredAIFlags ?? run.aiFlags ?? [];
+          const invalidHierarchy = new Set(sourceAIFlags.filter(f => f.category === 'desc_code_conflict').map(f => f.woNumber)).size;
+          setCodeQuality({ notListed, missing, invalidHierarchy, valid: Math.max(0, total - notListed - missing - invalidHierarchy) });
         } else {
           const scopeFilter = visualWhere ? `WHERE ${visualWhere}` : '';
           const [r] = await query(`
@@ -568,17 +620,25 @@ export default function AuditDashboard() {
               ${scopeFilter}
             )
             SELECT
-              COUNT(*) FILTER (WHERE p <> '' AND d <> '' AND c <> '' AND p NOT LIKE 'NOT LISTED%' AND d NOT LIKE 'NOT LISTED%' AND c NOT LIKE 'NOT LISTED%') AS valid,
               COUNT(*) FILTER (WHERE p LIKE 'NOT LISTED%' OR d LIKE 'NOT LISTED%' OR c LIKE 'NOT LISTED%') AS not_listed,
               COUNT(*) FILTER (WHERE p = '' AND d = '' AND c = '') AS missing,
               COUNT(*) AS total
             FROM per
           `);
-          const valid = Number(r?.valid ?? 0);
           const notListed = Number(r?.not_listed ?? 0);
           const missing = Number(r?.missing ?? 0);
           const total = Number(r?.total ?? 0);
-          setCodeQuality({ valid, notListed, invalidHierarchy: Math.max(0, total - valid - notListed - missing), missing });
+          // For the visual WO set, count desc_code_conflict flags within that scope
+          let cqAIFlags = liveStats?.filteredAIFlags ?? run.aiFlags ?? [];
+          if (visualWhere) {
+            try {
+              const woRows = await query(`SELECT DISTINCT work_order_number AS wo FROM v_analysis_scope ${scopeFilter}`);
+              const woSet = new Set(woRows.map((w) => String(w.wo ?? '')));
+              cqAIFlags = cqAIFlags.filter((f) => woSet.has(f.woNumber));
+            } catch { /* fallback to unfiltered */ }
+          }
+          const invalidHierarchy = new Set(cqAIFlags.filter(f => f.category === 'desc_code_conflict').map(f => f.woNumber)).size;
+          setCodeQuality({ notListed, missing, invalidHierarchy, valid: Math.max(0, total - notListed - missing - invalidHierarchy) });
         }
       } catch {
         setCodeQuality(null);
@@ -799,6 +859,7 @@ export default function AuditDashboard() {
 
       {/* When liveStats is available (scope filtered without re-run), derive display values from it */}
       {(() => {
+        // Charts (Error Distribution etc.) still use liveStats for scope-filtered counts
         const displayRuleChecks = liveStats
           ? { ...run.ruleChecks, totalWOs: liveStats.totalWOs, flaggedWOs: liveStats.filteredRuleWOs }
           : run.ruleChecks;
@@ -830,9 +891,24 @@ export default function AuditDashboard() {
             })()
           : overallQuality;
 
+        // Stat cards: react to WC visual filter only — not to live scope filter changes
+        const cardRuleChecks = visualStats
+          ? { ...run.ruleChecks, totalWOs: visualStats.totalWOs, flaggedWOs: visualStats.filteredRuleWOs }
+          : run.ruleChecks;
+        const cardAISummary: AIFlagSummary | null = visualStats
+          ? {
+              totalFlagged: visualStats.aiFlagged,
+              totalFlags: visualStats.totalAIFlags,
+              byCategory: visualStats.filteredByCategory,
+              generatedAt: run.aiFlagSummary?.generatedAt ?? '',
+              scopeWOCount: visualStats.totalWOs,
+            }
+          : run.aiFlagSummary;
+        const cardAIFlags = visualStats ? visualStats.filteredAIFlags : (run.aiFlags ?? []);
+
         return (
           <>
-            <SummaryRow ruleChecks={displayRuleChecks} aiFlagSummary={displayAISummary} aiFlags={displayAIFlags} />
+            <SummaryRow ruleChecks={cardRuleChecks} aiFlagSummary={cardAISummary} aiFlags={cardAIFlags} />
 
             <ChartCard
               title="Error Distribution"

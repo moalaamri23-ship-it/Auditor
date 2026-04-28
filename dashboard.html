@@ -614,16 +614,27 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Meta / stamp ────────────────────────────────────────────────────────
-  const projectName = D.project?.name || 'Reliability Audit';
-  const periodLabel = D.run?.periodLabel || '';
-  const runIndex    = D.run?.runIndex ?? 1;
-  const totalWOs    = D.kpi?.totalWOs ?? 0;
-  const analysedAt  = fmtDateTime(D.run?.lastAnalysedAt);
+  const periodLabel    = D.run?.periodLabel || '';
+  const totalWOs       = D.kpi?.totalWOs ?? 0;
+  const analysedAt     = fmtDateTime(D.run?.lastAnalysedAt);
+  const wcDesc         = D.run?.workCenterDescription || D.run?.analysisFilters?.workCenter?.[0] || '';
+
+  const formatPeriodType = (p) => {
+    switch ((p || '').toUpperCase()) {
+      case 'WEEKLY':     return 'Weekly Audit';
+      case 'BIWEEKLY':   return 'Bi-Weekly Audit';
+      case 'MONTHLY':    return 'Monthly Audit';
+      case 'QUARTERLY':  return 'Quarterly Audit';
+      case 'YEARLY':     return 'Yearly Audit';
+      default:           return 'Reliability Audit';
+    }
+  };
+  const auditTypeLabel = formatPeriodType(D.project?.period);
 
   $('stamp-left').textContent  = `SAP Reliability Auditor — Exported Report`;
   $('stamp-right').textContent = analysedAt;
   $('page-meta').textContent   =
-    `${projectName} · Run #${runIndex} · ${periodLabel} · ${fmt(totalWOs)} WOs in scope`;
+    `${auditTypeLabel} · ${periodLabel}${wcDesc ? ' · To ' + wcDesc : ''} · ${fmt(totalWOs)} WOs in scope`;
 
   // ── KPI cards ────────────────────────────────────────────────────────────
   const kpi = D.kpi || {};
@@ -779,7 +790,7 @@ function renderLineChart(container, runs, categoryKey, labelMap, palette) {
     return;
   }
 
-  const W = 680, H = 240, PL = 48, PR = 16, PT = 16, PB = 56;
+  const W = 680, H = 270, PL = 48, PR = 16, PT = 16, PB = 76;
   const innerW = W - PL - PR, innerH = H - PT - PB;
   const xStep = allKeys.length > 0 ? innerW / (runs.length - 1) : innerW;
 
@@ -808,7 +819,7 @@ function renderLineChart(container, runs, categoryKey, labelMap, palette) {
   runs.forEach((r, i) => {
     const x = PL + i * xStep;
     const lbl = esc(r.periodLabel || ('Run ' + r.runIndex));
-    xLabelSvg += `<text x="${x.toFixed(1)}" y="${(H - 8).toFixed(1)}" text-anchor="middle" font-size="9" fill="#64748b" transform="rotate(-30,${x.toFixed(1)},${(H - 8).toFixed(1)})">${lbl}</text>`;
+    xLabelSvg += `<text x="${x.toFixed(1)}" y="${(H - 16).toFixed(1)}" text-anchor="middle" font-size="9" fill="#64748b" transform="rotate(-30,${x.toFixed(1)},${(H - 16).toFixed(1)})">${lbl}</text>`;
   });
 
   // Polylines per category
@@ -838,10 +849,10 @@ function renderLineChart(container, runs, categoryKey, labelMap, palette) {
 
   const legendH = allKeys.length * 18 + 4;
   container.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+    <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:hidden">
       ${gridSvg}${linesSvg}${xLabelSvg}
     </svg>
-    <svg viewBox="0 0 300 ${legendH}" width="300" style="display:block;margin:8px auto 0">
+    <svg viewBox="0 0 300 ${legendH}" width="300" style="display:block;margin:16px auto 0">
       ${legendSvg}
     </svg>`;
 }

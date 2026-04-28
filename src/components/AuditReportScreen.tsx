@@ -39,15 +39,17 @@ interface WorkCenterAuditData {
   woNumbers: string[];
 }
 
+type WODetail = { equipment: string; description: string; codes: string };
+
 // ── Standalone WC loader (mirrors ReportingSettingsScreen logic) ─────────────
 async function loadWorkCenters(
   columnMap: ColumnMap,
   filters: AnalysisFilters,
   aiFlags: AIFlag[],
   ruleChecks: RuleCheckResult | null,
-): Promise<WorkCenterAuditData[]> {
+): Promise<[WorkCenterAuditData[], Map<string, WODetail>]> {
   const hasWC = !!columnMap.work_center;
-  if (!hasWC) return [];
+  if (!hasWC) return [[], new Map()];
 
   const descCol = columnMap.work_center_description ? 'work_center_description' : null;
 
@@ -84,7 +86,7 @@ async function loadWorkCenters(
 
   const rows = await query(sql);
 
-  return rows.map(r => {
+  const wcData: WorkCenterAuditData[] = rows.map(r => {
     const woNumbers = String(r.wo_list ?? '').split('|').filter(Boolean);
     const woSet = new Set(woNumbers);
 
@@ -121,6 +123,41 @@ async function loadWorkCenters(
       woNumbers,
     };
   });
+
+  // Build per-WO detail map for rule-only WOs that have no AI flag data
+  const woDetailMap = new Map<string, WODetail>();
+  try {
+    const allWONums = wcData.flatMap(d => d.woNumbers);
+    if (allWONums.length > 0) {
+      const esc = (s: string) => s.replace(/'/g, "''");
+      const inList = allWONums.map(w => `'${esc(w)}'`).join(',');
+      const detailRows = await query(`
+        SELECT DISTINCT
+          CAST(work_order_number AS VARCHAR) AS wo_num,
+          COALESCE(CAST(equipment_description AS VARCHAR), '') AS equipment,
+          COALESCE(CAST(work_order_description AS VARCHAR), '') AS description,
+          COALESCE(
+            CONCAT_WS(' | ',
+              NULLIF(TRIM(CAST(object_part_code_description AS VARCHAR)), ''),
+              NULLIF(TRIM(CAST(damage_code_description AS VARCHAR)), ''),
+              NULLIF(TRIM(CAST(cause_code_description AS VARCHAR)), '')
+            ), ''
+          ) AS codes
+        FROM v_wo_primary
+        WHERE work_order_number IN (${inList})
+      `);
+      for (const dr of detailRows) {
+        const wo = String(dr.wo_num ?? '');
+        if (wo) woDetailMap.set(wo, {
+          equipment:   String(dr.equipment   ?? ''),
+          description: String(dr.description ?? ''),
+          codes:       String(dr.codes       ?? ''),
+        });
+      }
+    }
+  } catch { /* detail map stays empty — rule-only WOs will show — */ }
+
+  return [wcData, woDetailMap];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,6 +175,7 @@ export default function AuditReportScreen() {
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
 
   const [wcData, setWcData] = useState<WorkCenterAuditData[]>([]);
+  const [woDetailMap, setWoDetailMap] = useState<Map<string, WODetail>>(new Map());
   const [loadingData, setLoadingData] = useState(false);
 
   const [selectedWCs, setSelectedWCs] = useState<Set<string>>(new Set());
@@ -160,13 +198,14 @@ export default function AuditReportScreen() {
     const t = setTimeout(async () => {
       setLoadingData(true);
       try {
-        const data = await loadWorkCenters(
+        const [data, detailMap] = await loadWorkCenters(
           run.columnMap,
           filters,
           run.aiFlags ?? [],
           run.ruleChecks ?? null,
         );
         setWcData(data);
+        setWoDetailMap(detailMap);
         setSelectedWCs(prev => {
           const next = new Set<string>();
           data.forEach(d => { if (prev.has(d.workCenter)) next.add(d.workCenter); });
@@ -348,7 +387,7 @@ export default function AuditReportScreen() {
       total:         wc.totalWOs,
     };
 
-    // Top equipment — count distinct flagged WOs per equipment (not flag instances)
+    // Top equipment — count distinct flagged WOs per equipment (AI ∪ rule)
     const equipWoMap = new Map<string, Set<string>>();
     for (const flag of wcAIFlags) {
       if (flag.equipment) {
@@ -357,18 +396,26 @@ export default function AuditReportScreen() {
         equipWoMap.set(flag.equipment, s);
       }
     }
+    // Also include rule-flagged WOs using equipment looked up from AI flags
+    const woEquipmentMap = new Map((run?.aiFlags ?? []).map(f => [f.woNumber, f.equipment ?? '']));
+    for (const fw of wcRuleWOs) {
+      const eq = woEquipmentMap.get(fw.wo);
+      if (eq) {
+        const s = equipWoMap.get(eq) ?? new Set<string>();
+        s.add(fw.wo);
+        equipWoMap.set(eq, s);
+      }
+    }
     const topEquipment = [...equipWoMap.entries()]
       .sort(([, a], [, b]) => b.size - a.size)
       .slice(0, 10)
       .map(([equipment, wos]) => ({ equipment, count: wos.size }));
 
-    // Code quality derived from rule check classifications (no DuckDB query needed)
+    // Code quality: invalid hierarchy = desc_code_conflict AI flags (aligned with main dashboard)
     const notListedWOs = new Set(
       wcRuleWOs.filter(fw => fw.checks.includes('not_listed_codes')).map(fw => fw.wo));
     const invalidHierarchyWOs = new Set(
-      wcRuleWOs.filter(fw =>
-        fw.checks.some(c => ['catalog_invalid_object_part', 'catalog_invalid_damage_for_part', 'catalog_invalid_cause_for_damage'].includes(c))
-      ).map(fw => fw.wo));
+      wcAIFlags.filter(f => f.category === 'desc_code_conflict').map(f => f.woNumber));
     const missingCodeWOs = new Set(
       wcRuleWOs.filter(fw =>
         fw.checks.some(c => ['catalog_missing_match', 'missing_scoping_text'].includes(c)) &&
@@ -386,12 +433,14 @@ export default function AuditReportScreen() {
       const flagsForWO = wcAIFlags.filter(f => f.woNumber === woNumber);
       const ruleEntry  = wcRuleWOs.find(fw => fw.wo === woNumber);
       const ref        = flagsForWO[0];
+      // For rule-only WOs (no AI flag), fall back to the WO detail map from the DB query
+      const detail = !ref ? woDetailMap.get(woNumber) : undefined;
       return {
         woNumber,
-        equipment:   ref?.equipment   ?? '',
+        equipment:   ref?.equipment   ?? detail?.equipment   ?? '',
         workCenter:  wc.workCenter,
-        description: ref?.description ?? '',
-        codes:       ref?.codes       ?? '',
+        description: ref?.description ?? detail?.description ?? '',
+        codes:       ref?.codes       ?? detail?.codes       ?? '',
         ruleFlags:   ruleEntry?.checks ?? [],
         aiFlags: flagsForWO.map(f => ({
           category:      f.category,
@@ -427,11 +476,12 @@ export default function AuditReportScreen() {
         period: project?.period ?? '',
       },
       run: {
-        runIndex:        run?.runIndex ?? 1,
-        periodLabel:     run?.periodLabel ?? '',
-        fileName:        run?.fileName ?? '',
-        lastAnalysedAt:  run?.lastAnalysedAt ?? '',
-        analysisFilters: { ...filters, workCenter: [wc.workCenter] },
+        runIndex:             run?.runIndex ?? 1,
+        periodLabel:          run?.periodLabel ?? '',
+        fileName:             run?.fileName ?? '',
+        lastAnalysedAt:       run?.lastAnalysedAt ?? '',
+        analysisFilters:      { ...filters, workCenter: [wc.workCenter] },
+        workCenterDescription: wc.description,
       },
       kpi: {
         totalWOs:       wc.totalWOs,
