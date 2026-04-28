@@ -419,7 +419,7 @@ export default function AuditReportScreen() {
         body: JSON.stringify({
           emailTo,
           subject: `Reliability Audit Report — ${wc.description || wc.workCenter}`,
-          emailBody: getEmailText(wc),
+          emailBody: `<pre style="font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.7;color:#1e293b;white-space:pre-wrap;background:none;border:none;padding:0;margin:0">${getEmailText(wc)}</pre>`,
           dashboardJson: JSON.stringify(buildDashboardPayload(wc)),
         }),
       });
