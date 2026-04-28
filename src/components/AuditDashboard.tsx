@@ -19,7 +19,18 @@ import { useRunAutoRestore } from '../hooks/useRunAutoRestore';
 
 const RULE_COLOR = '#f59e0b';
 const AI_COLOR = '#6366f1';
-const PIE_COLORS = ['#22c55e', '#f59e0b', '#ef4444', '#94a3b8'];
+
+const CQ_COLORS: Record<string, string> = {
+  'Valid':             '#22c55e',
+  'Not Listed':        '#f59e0b',
+  'Invalid Hierarchy': '#ef4444',
+  'Missing':           '#94a3b8',
+};
+const OQ_COLORS: Record<string, string> = {
+  'Clean WOs':           '#22c55e',
+  'Review Quality (AI)': '#6366f1',
+  'Missing Fields':      '#f59e0b',
+};
 
 // ─── Visual cross-filter types ───────────────────────────────────────────────
 
@@ -183,8 +194,6 @@ async function _computeChartCache(
 
 // ─── Overall Quality ring chart ──────────────────────────────────────────────
 
-const OVERALL_QUALITY_COLORS = ['#22c55e', '#6366f1', '#f59e0b'];
-
 function OverallQualityRing({
   data,
   visualSelection,
@@ -196,13 +205,14 @@ function OverallQualityRing({
 }) {
   if (!data || data.total === 0) return <Empty />;
   const rows = [
-    { name: 'Valid', value: data.valid },
-    { name: 'Entry Quality', value: data.entryQuality },
-    { name: 'Missing Fields', value: data.missingFields },
+    { name: 'Clean WOs',           value: data.valid },
+    { name: 'Review Quality (AI)', value: data.entryQuality },
+    { name: 'Missing Fields',      value: data.missingFields },
   ].filter((r) => r.value > 0);
   if (rows.length === 0) return <Empty />;
+  const total = rows.reduce((s, r) => s + r.value, 0);
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={280}>
       <PieChart style={{ cursor: 'pointer' }}>
         <Pie
           data={rows}
@@ -213,17 +223,36 @@ function OverallQualityRing({
           paddingAngle={2}
           onClick={(entry) => onSelect(entry.name)}
         >
-          {rows.map((r, i) => (
+          {rows.map((r) => (
             <Cell
-              key={i}
-              fill={OVERALL_QUALITY_COLORS[i % OVERALL_QUALITY_COLORS.length]}
+              key={r.name}
+              fill={OQ_COLORS[r.name] ?? '#94a3b8'}
               fillOpacity={itemOpacity(visualSelection, 'overallQualitySegment', r.name)}
               style={{ cursor: 'pointer' }}
             />
           ))}
         </Pie>
-        <Tooltip />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Legend
+          content={({ payload }) => (
+            <div className="flex flex-col gap-1 mt-2">
+              {(payload ?? []).map((p: any) => {
+                const pct = total > 0 ? ((p.payload.value / total) * 100).toFixed(1) : '0.0';
+                return (
+                  <div key={p.value} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color }} />
+                      <span className="text-slate-600">{p.value}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 text-[10px]">{pct}%</span>
+                      <span className="font-bold text-slate-700 font-mono w-8 text-right">{p.payload.value.toLocaleString()}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        />
       </PieChart>
     </ResponsiveContainer>
   );
@@ -388,7 +417,7 @@ export default function AuditDashboard() {
         const aiWOs = (run.aiFlags ?? []).map((f) => f.woNumber);
         const ruleChecksLocal = run.ruleChecks;
         const ruleWOs = ruleChecksLocal?.flaggedWOs.map((f) => f.wo) ?? [];
-        if (visualSelection.value === 'Entry Quality') {
+        if (visualSelection.value === 'Review Quality (AI)') {
           const list = aiWOs.map((w) => `'${esc(w)}'`).join(',');
           visualWhere = list ? `work_order_number IN (${list})` : 'FALSE';
         } else if (visualSelection.value === 'Missing Fields') {
@@ -396,7 +425,7 @@ export default function AuditDashboard() {
           const ruleOnly = ruleWOs.filter((w) => !aiSet.has(w));
           const list = ruleOnly.map((w) => `'${esc(w)}'`).join(',');
           visualWhere = list ? `work_order_number IN (${list})` : 'FALSE';
-        } else if (visualSelection.value === 'Valid') {
+        } else if (visualSelection.value === 'Clean WOs') {
           const allFlagged = [...new Set([...aiWOs, ...ruleWOs])];
           const list = allFlagged.map((w) => `'${esc(w)}'`).join(',');
           visualWhere = list ? `work_order_number NOT IN (${list})` : null;
@@ -405,8 +434,8 @@ export default function AuditDashboard() {
         visualWhere = buildVisualScopeWhere(visualSelection, ruleChecks);
       }
 
-      // Precompute rule-flagged WO list for combined equipment SQL
-      const ruleFlaggedWOs = ruleChecks?.flaggedWOs.map((f) => f.wo) ?? [];
+      // Precompute rule-flagged WO list for combined equipment SQL — use live-filtered list when available
+      const ruleFlaggedWOs = (liveStats?.filteredRuleWOs ?? ruleChecks?.flaggedWOs ?? []).map((f) => f.wo);
       const ruleWOsSQL = ruleFlaggedWOs.length > 0
         ? ruleFlaggedWOs.map((w) => `'${esc(w)}'`).join(',')
         : null;
@@ -603,7 +632,7 @@ export default function AuditDashboard() {
       if (isOQSource) {
         const aiWOs = (run.aiFlags ?? []).map((f) => f.woNumber);
         const ruleWOs = ruleChecks.flaggedWOs.map((f) => f.wo);
-        if (visualSelection.value === 'Entry Quality') {
+        if (visualSelection.value === 'Review Quality (AI)') {
           const list = aiWOs.map((w) => `'${esc(w)}'`).join(',');
           visualWhere = list ? `work_order_number IN (${list})` : 'FALSE';
         } else if (visualSelection.value === 'Missing Fields') {
@@ -611,7 +640,7 @@ export default function AuditDashboard() {
           const ruleOnly = ruleWOs.filter((w) => !aiSet.has(w));
           const list = ruleOnly.map((w) => `'${esc(w)}'`).join(',');
           visualWhere = list ? `work_order_number IN (${list})` : 'FALSE';
-        } else if (visualSelection.value === 'Valid') {
+        } else if (visualSelection.value === 'Clean WOs') {
           const allFlagged = [...new Set([...aiWOs, ...ruleWOs])];
           const list = allFlagged.map((w) => `'${esc(w)}'`).join(',');
           visualWhere = list ? `work_order_number NOT IN (${list})` : null;
@@ -949,7 +978,8 @@ function SummaryRow({
 }) {
   const ruleFlagged = new Set(ruleChecks.flaggedWOs.map((f) => f.wo)).size;
   const aiFlagged = aiFlagSummary?.totalFlagged ?? 0;
-  const totalFlags = aiFlagSummary?.totalFlags ?? 0;
+  const ruleHits = ruleChecks.flaggedWOs.reduce((s, fw) => s + fw.checks.length, 0);
+  const totalFlags = (aiFlagSummary?.totalFlags ?? 0) + ruleHits;
   const aiWoSet = new Set(aiFlags.map((f) => f.woNumber));
   const ruleWoSet = new Set(ruleChecks.flaggedWOs.map((f) => f.wo));
   const allFlagged = new Set([...aiWoSet, ...ruleWoSet]);
@@ -958,7 +988,7 @@ function SummaryRow({
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <Stat label="Rule-Flagged WOs" value={ruleFlagged} accent="text-amber-600" />
       <Stat label="AI-Flagged WOs" value={aiFlagged} accent="text-indigo-600" />
-      <Stat label="Total AI Flags" value={totalFlags} accent="text-violet-600" />
+      <Stat label="Total Flags" value={totalFlags} accent="text-violet-600" />
       <Stat label="Clean WOs" value={cleanCount} accent="text-green-600" />
     </div>
   );
@@ -1035,36 +1065,47 @@ function ErrorDistribution({
         .filter((d) => d.value > 0)
     : [];
 
-  const data = [...ruleData, ...aiData];
-  if (data.length === 0) return <Empty />;
+  const allData = [...ruleData, ...aiData];
+  if (allData.length === 0) return <Empty />;
+  const maxVal = Math.max(...allData.map((d) => d.value), 1);
+
+  type BarItem = { key: string; label: string; value: number; type: 'Rule' | 'AI' };
+  const renderSection = (items: BarItem[], title: string, color: string) => {
+    if (items.length === 0) return null;
+    return (
+      <div className="mb-3">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2 mt-1">{title}</div>
+        {items.map((d) => {
+          const isSelected = visualSelection?.type === 'flagCategory' && visualSelection.value === d.key;
+          const dimmed = visualSelection?.type === 'flagCategory' && visualSelection.value !== d.key;
+          const pct = (d.value / maxVal) * 100;
+          return (
+            <div
+              key={d.key}
+              onClick={() => onSelect(d.key)}
+              style={{ opacity: dimmed ? 0.25 : 1 }}
+              className={`flex items-center gap-2 mb-1.5 cursor-pointer rounded px-1 py-0.5 transition hover:bg-slate-50 ${isSelected ? 'bg-indigo-50 ring-1 ring-indigo-200' : ''}`}
+            >
+              <div className="text-[10px] text-slate-600 text-right shrink-0" style={{ width: 172 }}>{d.label}</div>
+              <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+                <div
+                  className="h-full rounded"
+                  style={{ width: `${pct.toFixed(1)}%`, background: color, minWidth: d.value > 0 ? 2 : 0 }}
+                />
+              </div>
+              <div className="text-[11px] font-bold text-slate-600 w-8 text-right shrink-0 font-mono">{d.value}</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <BarChart
-        data={data}
-        layout="vertical"
-        margin={{ left: 0, right: 16, top: 0, bottom: 0 }}
-        style={{ cursor: 'pointer' }}
-        onClick={(chartData) => {
-          const key = chartData?.activePayload?.[0]?.payload?.key;
-          if (key) onSelect(key);
-        }}
-      >
-        <XAxis type="number" tick={{ fontSize: 10 }} />
-        <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={160} />
-        <Tooltip />
-        <Bar dataKey="value">
-          {data.map((d, i) => (
-            <Cell
-              key={i}
-              fill={d.type === 'Rule' ? RULE_COLOR : AI_COLOR}
-              fillOpacity={itemOpacity(visualSelection, 'flagCategory', d.key)}
-              style={{ cursor: 'pointer' }}
-            />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="py-1">
+      {renderSection(ruleData, 'Rule-Based Issues', RULE_COLOR)}
+      {renderSection(aiData, 'AI-Detected Issues', AI_COLOR)}
+    </div>
   );
 }
 
@@ -1079,14 +1120,15 @@ function CodeQualityDonut({
 }) {
   if (!data) return <Empty />;
   const rows = [
-    { name: 'Valid', value: data.valid },
-    { name: 'Not Listed', value: data.notListed },
+    { name: 'Valid',             value: data.valid },
+    { name: 'Not Listed',        value: data.notListed },
     { name: 'Invalid Hierarchy', value: data.invalidHierarchy },
-    { name: 'Missing', value: data.missing },
+    { name: 'Missing',           value: data.missing },
   ].filter((r) => r.value > 0);
   if (rows.length === 0) return <Empty />;
+  const total = rows.reduce((s, r) => s + r.value, 0);
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={280}>
       <PieChart style={{ cursor: 'pointer' }}>
         <Pie
           data={rows}
@@ -1097,17 +1139,36 @@ function CodeQualityDonut({
           paddingAngle={2}
           onClick={(entry) => onSelect(entry.name)}
         >
-          {rows.map((r, i) => (
+          {rows.map((r) => (
             <Cell
-              key={i}
-              fill={PIE_COLORS[i % PIE_COLORS.length]}
+              key={r.name}
+              fill={CQ_COLORS[r.name] ?? '#94a3b8'}
               fillOpacity={itemOpacity(visualSelection, 'codeQualitySegment', r.name)}
               style={{ cursor: 'pointer' }}
             />
           ))}
         </Pie>
-        <Tooltip />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Legend
+          content={({ payload }) => (
+            <div className="flex flex-col gap-1 mt-2">
+              {(payload ?? []).map((p: any) => {
+                const pct = total > 0 ? ((p.payload.value / total) * 100).toFixed(1) : '0.0';
+                return (
+                  <div key={p.value} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color }} />
+                      <span className="text-slate-600">{p.value}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 text-[10px]">{pct}%</span>
+                      <span className="font-bold text-slate-700 font-mono w-8 text-right">{p.payload.value.toLocaleString()}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        />
       </PieChart>
     </ResponsiveContainer>
   );

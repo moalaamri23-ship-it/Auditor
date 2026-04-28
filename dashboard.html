@@ -303,8 +303,8 @@
     <!-- Per Work Center + Top Equipment -->
     <div class="grid-2">
       <div class="card animate-enter">
-        <div class="card-title">Per Work Center</div>
-        <div class="card-sub">Total WOs vs flagged</div>
+        <div class="card-title" id="chart-wc-title">Per Work Center</div>
+        <div class="card-sub" id="chart-wc-sub">Total WOs vs flagged</div>
         <div class="card-body">
           <div class="wc-scroll" id="chart-wc"></div>
         </div>
@@ -516,6 +516,34 @@ function renderDonut(container, segments, centerNum, centerLbl) {
   container.querySelector('.donut-svg-box').style.position = 'relative';
 }
 
+/* ── Single-WC summary bar (wider, 3-row horizontal) ─────────────────────── */
+function renderWCSummary(container, wc) {
+  if (!wc) { container.innerHTML = '<p class="empty">No data.</p>'; return; }
+  const total   = wc.total   || 0;
+  const flagged = wc.flagged || 0;
+  const clean   = Math.max(0, total - flagged);
+  const pctF    = total > 0 ? ((flagged / total) * 100).toFixed(1) : '0.0';
+  const pctC    = total > 0 ? ((clean   / total) * 100).toFixed(1) : '0.0';
+
+  const rows = [
+    { label: 'Total WOs',   value: total,   pct: '100.0', color: '#94a3b8' },
+    { label: 'Flagged WOs', value: flagged, pct: pctF,    color: '#6366f1' },
+    { label: 'Clean WOs',   value: clean,   pct: pctC,    color: '#22c55e' },
+  ];
+
+  container.innerHTML = rows.map(r => {
+    const w = total > 0 ? ((r.value / total) * 100).toFixed(1) : '0';
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <div style="width:110px;font-size:12px;color:#475569;text-align:right;flex-shrink:0">${esc(r.label)}</div>
+      <div style="flex:1;height:20px;background:#f1f5f9;border-radius:4px;overflow:hidden">
+        <div style="height:100%;background:${r.color};border-radius:4px;width:${w}%;min-width:${r.value > 0 ? 4 : 0}px"></div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#334155;width:36px;text-align:right;flex-shrink:0;font-family:monospace">${fmt(r.value)}</div>
+      <div style="font-size:11px;color:#94a3b8;width:40px;flex-shrink:0">${r.pct}%</div>
+    </div>`;
+  }).join('');
+}
+
 /* ── SVG Grouped Bar Chart (Per Work Center) ──────────────────────────────── */
 // Matches Recharts BarChart layout: categorical X-axis, numerical Y-axis,
 // two bars per group (Total = #94a3b8, Flagged = #6366f1).
@@ -602,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('kpi-grid').innerHTML = [
     { label: 'RULE-FLAGGED WOS', value: kpi.ruleFlaggedWOs, cls: 'amber'  },
     { label: 'AI-FLAGGED WOS',   value: kpi.aiFlaggedWOs,   cls: 'indigo' },
-    { label: 'TOTAL AI FLAGS',   value: kpi.totalAIFlags,   cls: 'violet' },
+    { label: 'TOTAL FLAGS',      value: kpi.totalFlags ?? kpi.totalAIFlags, cls: 'violet' },
     { label: 'CLEAN WOS',        value: kpi.cleanWOs,       cls: 'green'  },
   ].map(c => `
     <div class="kpi-card">
@@ -660,7 +688,15 @@ document.addEventListener('DOMContentLoaded', () => {
   ], fmt(oq.total || 0), 'Total WOs');
 
   // ── Per Work Center bar chart ────────────────────────────────────────────
-  renderGroupedBar($('chart-wc'), D.perWorkCenter || []);
+  const wcEntries = D.perWorkCenter || [];
+  if (wcEntries.length === 1) {
+    const wce = wcEntries[0];
+    $('chart-wc-title').textContent = esc(wce.workCenter) + ' — WO Summary';
+    $('chart-wc-sub').textContent   = 'Total work orders analysed vs. flagged';
+    renderWCSummary($('chart-wc'), wce);
+  } else {
+    renderGroupedBar($('chart-wc'), wcEntries);
+  }
 
   // ── Top Equipment ────────────────────────────────────────────────────────
   const te    = D.topEquipment || [];

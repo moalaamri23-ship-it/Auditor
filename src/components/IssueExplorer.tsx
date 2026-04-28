@@ -484,97 +484,93 @@ function RuleFlagsTab({
           );
         })}
       </div>
-      <div className="bg-white border border-slate-200 rounded shadow-sm">
-        {displayFlags.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-sm">No work orders match this filter.</div>
-        ) : (
-          <ul className="divide-y divide-slate-100 max-h-[600px] overflow-auto scroll-thin">
-            {displayFlags.slice(0, 500).map((f) => {
-              const isExpanded = expandedWO === f.wo;
-              const detail = detailCache.get(f.wo);
-              const isLoading = loadingDetail === f.wo;
+      {displayFlags.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded shadow-sm p-12 text-center text-slate-400 text-sm">No work orders match this filter.</div>
+      ) : (
+        <div className="max-h-[650px] overflow-auto scroll-thin space-y-2">
+          {displayFlags.slice(0, 500).map((f) => {
+            const isExpanded = expandedWO === f.wo;
+            const detail = detailCache.get(f.wo);
+            const isLoading = loadingDetail === f.wo;
 
-              return (
-                <li key={f.wo}>
-                  <button
-                    onClick={() => toggleWO(f.wo)}
-                    className="w-full text-left px-4 py-2 text-sm flex items-center gap-3 hover:bg-slate-50 transition"
-                  >
-                    <Icon
-                      name={isExpanded ? 'chevronDown' : 'chevronRight'}
-                      className="w-3.5 h-3.5 text-slate-400 shrink-0"
-                    />
-                    <span className="font-mono font-bold text-slate-800 w-32 shrink-0">{f.wo}</span>
-                    <CopyButton text={f.wo} />
-                    <div className="flex flex-wrap gap-1 flex-1">
-                      {f.checks.map((c) => (
-                        <span
-                          key={c}
-                          className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
-                        >
-                          {RULE_CHECK_LABELS[c].label}
-                        </span>
-                      ))}
-                    </div>
-                    <Icon
-                      name={isExpanded ? 'chevronUp' : 'chevronDown'}
-                      className="w-3.5 h-3.5 text-slate-300 shrink-0"
-                    />
-                  </button>
+            return (
+              <div key={f.wo} className="border border-slate-200 rounded overflow-hidden bg-white shadow-sm">
+                <button
+                  onClick={() => toggleWO(f.wo)}
+                  className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 hover:bg-slate-50 transition"
+                >
+                  <Icon
+                    name={isExpanded ? 'chevronDown' : 'chevronRight'}
+                    className="w-3.5 h-3.5 text-slate-400 shrink-0"
+                  />
+                  <span className="font-mono font-bold text-slate-800 w-32 shrink-0">{f.wo}</span>
+                  <CopyButton text={f.wo} />
+                  <div className="flex flex-wrap gap-1 flex-1">
+                    {f.checks.map((c) => (
+                      <span
+                        key={c}
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
+                      >
+                        {RULE_CHECK_LABELS[c].label}
+                      </span>
+                    ))}
+                  </div>
+                  <Icon
+                    name={isExpanded ? 'chevronUp' : 'chevronDown'}
+                    className="w-3.5 h-3.5 text-slate-300 shrink-0"
+                  />
+                </button>
 
-                  {isExpanded && (
-                    <div className="px-4 pb-3 pt-1 bg-slate-50 border-t border-slate-100 animate-enter">
-                      {!hasDB ? (
-                        <div className="text-xs text-slate-400 italic py-2">
-                          Re-upload file to see WO details.
-                        </div>
-                      ) : isLoading ? (
-                        <div className="text-xs text-slate-400 italic py-2">Loading…</div>
-                      ) : detail ? (
-                        <WODetailPanel detail={detail} />
-                      ) : (
-                        <div className="text-xs text-slate-400 italic py-2">Detail not available.</div>
-                      )}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-            {displayFlags.length > 500 && (
-              <li className="px-4 py-3 text-xs text-slate-400 italic">
-                … and {displayFlags.length - 500} more.
-              </li>
-            )}
-          </ul>
-        )}
-      </div>
+                {isExpanded && (
+                  <div className="px-4 pb-3 pt-1 bg-slate-50 border-t border-slate-200 animate-enter">
+                    {!hasDB ? (
+                      <div className="text-xs text-slate-400 italic py-2">
+                        Re-upload file to see WO details.
+                      </div>
+                    ) : isLoading ? (
+                      <div className="text-xs text-slate-400 italic py-2">Loading…</div>
+                    ) : detail ? (
+                      <WODetailPanel detail={detail} />
+                    ) : (
+                      <div className="text-xs text-slate-400 italic py-2">Detail not available.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {displayFlags.length > 500 && (
+            <div className="px-4 py-3 text-xs text-slate-400 italic">
+              … and {displayFlags.length - 500} more.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 function WODetailPanel({ detail }: { detail: WODetail }) {
   return (
-    <div className="grid sm:grid-cols-3 gap-3 text-xs py-1">
-      <div>
-        <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Equipment</div>
-        <div className="font-mono text-slate-700">{detail.equipment || '—'}</div>
-      </div>
-      <div>
-        <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Work Center</div>
-        <div className="font-mono text-slate-700">{detail.workCenter || '—'}</div>
-      </div>
-      <div>
-        <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Codes</div>
-        <div className="font-mono text-amber-700">{detail.codes || '—'}</div>
-      </div>
-      <div className="sm:col-span-2">
-        <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Description</div>
-        <div className="text-slate-700">{detail.description || '—'}</div>
-      </div>
-      <div>
-        <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Confirmation</div>
-        <div className="text-slate-500">{detail.closure || '—'}</div>
-      </div>
+    <div className="text-xs py-2 space-y-1.5">
+      <DetailField label="Equipment"   value={detail.equipment}   mono />
+      <DetailField label="Work Center" value={detail.workCenter}  mono />
+      <DetailField label="Description" value={detail.description} />
+      <DetailField label="Codes"       value={detail.codes}       mono amber />
+      {detail.closure && <DetailField label="Confirmation" value={detail.closure} muted />}
+    </div>
+  );
+}
+
+function DetailField({
+  label, value, mono, amber, muted,
+}: { label: string; value: string; mono?: boolean; amber?: boolean; muted?: boolean }) {
+  return (
+    <div className="flex gap-2">
+      <span className="text-slate-400 shrink-0 w-24">{label}</span>
+      <span className={`${mono ? 'font-mono' : ''} ${amber ? 'text-amber-700' : muted ? 'text-slate-500' : 'text-slate-700'}`}>
+        {value || '—'}
+      </span>
     </div>
   );
 }
@@ -633,81 +629,79 @@ function AIFlagsTab({ flags }: { flags: AIFlag[] }) {
         })}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded shadow-sm">
-        {woGroups.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-sm">No AI flags match this filter.</div>
-        ) : (
-          <ul className="divide-y divide-slate-100 max-h-[600px] overflow-auto scroll-thin">
-            {woGroups.slice(0, 300).map(({ wo, flags: wFlags, topSeverity, equipment }) => {
-              const isExpanded = expandedWOs.has(wo);
-              const sevColor =
-                topSeverity === 'HIGH'
-                  ? 'bg-red-100 text-red-700'
-                  : topSeverity === 'MEDIUM'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-yellow-100 text-yellow-700';
+      {woGroups.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded shadow-sm p-12 text-center text-slate-400 text-sm">No AI flags match this filter.</div>
+      ) : (
+        <div className="max-h-[650px] overflow-auto scroll-thin space-y-2">
+          {woGroups.slice(0, 300).map(({ wo, flags: wFlags, topSeverity, equipment }) => {
+            const isExpanded = expandedWOs.has(wo);
+            const sevColor =
+              topSeverity === 'HIGH'
+                ? 'bg-red-100 text-red-700'
+                : topSeverity === 'MEDIUM'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-yellow-100 text-yellow-700';
 
-              return (
-                <li key={wo}>
-                  <button
-                    onClick={() => toggleWO(wo)}
-                    className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 hover:bg-slate-50 transition"
-                  >
-                    <Icon name={isExpanded ? 'chevronDown' : 'chevronRight'} className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="font-mono font-bold text-slate-800 w-32 shrink-0">{wo}</span>
-                    <CopyButton text={wo} />
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${sevColor}`}>{topSeverity}</span>
-                    <span className="text-xs text-slate-500">{wFlags.length} flag{wFlags.length !== 1 ? 's' : ''}</span>
-                    {equipment && (
-                      <span className="text-[10px] text-slate-400 font-mono truncate max-w-[200px] ml-auto">{equipment}</span>
-                    )}
-                    <Icon name={isExpanded ? 'chevronUp' : 'chevronDown'} className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                  </button>
-
-                  {isExpanded && (
-                    <div className="border-t border-slate-100 bg-slate-50 animate-enter">
-                      {/* Shared WO info — shown once */}
-                      <WOSharedInfo flag={wFlags[0]} />
-                      {/* Per-flag rows */}
-                      <div className="divide-y divide-slate-100">
-                        {wFlags.map((f, i) => {
-                          const fSevColor =
-                            f.severity === 'HIGH'
-                              ? 'bg-red-100 text-red-700'
-                              : f.severity === 'MEDIUM'
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-yellow-100 text-yellow-700';
-                          return (
-                            <div key={i} className="px-4 py-3">
-                              <div className="flex flex-wrap items-center gap-2 mb-2">
-                                {f.rowSeq != null && (
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                                    Row {f.rowSeq}
-                                  </span>
-                                )}
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${fSevColor}`}>{f.severity}</span>
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                                  {FLAG_CATEGORY_LABELS[f.category]}
-                                </span>
-                              </div>
-                              <AIFlagRowBody flag={f} />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+            return (
+              <div key={wo} className="border border-slate-200 rounded overflow-hidden bg-white shadow-sm">
+                <button
+                  onClick={() => toggleWO(wo)}
+                  className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 hover:bg-slate-50 transition"
+                >
+                  <Icon name={isExpanded ? 'chevronDown' : 'chevronRight'} className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span className="font-mono font-bold text-slate-800 w-32 shrink-0">{wo}</span>
+                  <CopyButton text={wo} />
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${sevColor}`}>{topSeverity}</span>
+                  <span className="text-xs text-slate-500">{wFlags.length} flag{wFlags.length !== 1 ? 's' : ''}</span>
+                  {equipment && (
+                    <span className="text-[10px] text-slate-400 font-mono truncate max-w-[200px] ml-auto">{equipment}</span>
                   )}
-                </li>
-              );
-            })}
-            {woGroups.length > 300 && (
-              <li className="px-4 py-3 text-xs text-slate-400 italic">
-                … and {woGroups.length - 300} more WOs.
-              </li>
-            )}
-          </ul>
-        )}
-      </div>
+                  <Icon name={isExpanded ? 'chevronUp' : 'chevronDown'} className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                </button>
+
+                {isExpanded && (
+                  <div className="border-t border-slate-200 bg-slate-50 animate-enter">
+                    {/* Shared WO info — shown once */}
+                    <WOSharedInfo flag={wFlags[0]} />
+                    {/* Per-flag rows */}
+                    <div className="divide-y divide-slate-100">
+                      {wFlags.map((f, i) => {
+                        const fSevColor =
+                          f.severity === 'HIGH'
+                            ? 'bg-red-100 text-red-700'
+                            : f.severity === 'MEDIUM'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-yellow-100 text-yellow-700';
+                        return (
+                          <div key={i} className="px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              {f.rowSeq != null && (
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                                  Row {f.rowSeq}
+                                </span>
+                              )}
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${fSevColor}`}>{f.severity}</span>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                                {FLAG_CATEGORY_LABELS[f.category]}
+                              </span>
+                            </div>
+                            <AIFlagRowBody flag={f} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {woGroups.length > 300 && (
+            <div className="px-4 py-3 text-xs text-slate-400 italic">
+              … and {woGroups.length - 300} more WOs.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -715,21 +709,10 @@ function AIFlagsTab({ flags }: { flags: AIFlag[] }) {
 // Shared WO-level info block — rendered once per WO group
 function WOSharedInfo({ flag }: { flag: AIFlag }) {
   return (
-    <div className="px-4 py-3 border-b border-slate-200 bg-white grid sm:grid-cols-3 gap-3 text-xs">
-      {flag.equipment && (
-        <div>
-          <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Equipment</div>
-          <div className="font-mono text-slate-700">{flag.equipment}</div>
-        </div>
-      )}
-      <div className={flag.equipment ? 'sm:col-span-2' : 'sm:col-span-3'}>
-        <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Description</div>
-        <div className="text-slate-700">{flag.description || '—'}</div>
-      </div>
-      <div className="sm:col-span-3">
-        <div className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Codes</div>
-        <div className="font-mono text-amber-700">{flag.codes || '—'}</div>
-      </div>
+    <div className="px-4 py-3 border-b border-slate-200 bg-white text-xs space-y-1.5">
+      {flag.equipment && <DetailField label="Equipment"   value={flag.equipment}        mono />}
+      <DetailField label="Description" value={flag.description || '—'} />
+      <DetailField label="Codes"       value={flag.codes || '—'}         mono amber />
     </div>
   );
 }

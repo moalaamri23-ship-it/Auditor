@@ -323,7 +323,9 @@ export default function AuditReportScreen() {
     const aiFlaggedSet   = new Set(wcAIFlags.map(f => f.woNumber));
     const ruleFlaggedSet = new Set(wcRuleWOs.map(fw => fw.wo));
     const allFlaggedSet  = new Set([...aiFlaggedSet, ...ruleFlaggedSet]);
-    const totalAIFlags   = wcAIFlags.length;
+    const totalAIFlagInstances = wcAIFlags.length;
+    const ruleFlagHits   = wcRuleWOs.reduce((s, fw) => s + fw.checks.length, 0);
+    const totalFlags     = totalAIFlagInstances + ruleFlagHits;
     const cleanWOs       = wc.totalWOs - allFlaggedSet.size;
 
     const RULE_KEYS = [
@@ -346,15 +348,19 @@ export default function AuditReportScreen() {
       total:         wc.totalWOs,
     };
 
-    // Top equipment derived from AI flags (equipment field on each flag)
-    const equipCounts = new Map<string, number>();
+    // Top equipment — count distinct flagged WOs per equipment (not flag instances)
+    const equipWoMap = new Map<string, Set<string>>();
     for (const flag of wcAIFlags) {
-      if (flag.equipment) equipCounts.set(flag.equipment, (equipCounts.get(flag.equipment) ?? 0) + 1);
+      if (flag.equipment) {
+        const s = equipWoMap.get(flag.equipment) ?? new Set<string>();
+        s.add(flag.woNumber);
+        equipWoMap.set(flag.equipment, s);
+      }
     }
-    const topEquipment = [...equipCounts.entries()]
-      .sort(([, a], [, b]) => b - a)
+    const topEquipment = [...equipWoMap.entries()]
+      .sort(([, a], [, b]) => b.size - a.size)
       .slice(0, 10)
-      .map(([equipment, count]) => ({ equipment, count }));
+      .map(([equipment, wos]) => ({ equipment, count: wos.size }));
 
     // Code quality derived from rule check classifications (no DuckDB query needed)
     const notListedWOs = new Set(
@@ -431,7 +437,7 @@ export default function AuditReportScreen() {
         totalWOs:       wc.totalWOs,
         ruleFlaggedWOs: wc.ruleFlagsCount,
         aiFlaggedWOs:   wc.aiFlagsCount,
-        totalAIFlags,
+        totalFlags,
         cleanWOs,
       },
       errorDistribution,
