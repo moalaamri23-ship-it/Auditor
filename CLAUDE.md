@@ -85,6 +85,7 @@ Only columns listed in `TIMESTAMP_COLUMNS` (`src/constants.ts`) are treated as d
 ### File Structure
 
 ```
+dashboard.html                    # Standalone Power Automate report attachment (see Reporting section)
 src/
 ├── types.ts                      # All TypeScript interfaces (Screen, AuditProject, AuditRun,
 │                                 #   AnalysisFilters, FilterOptions, AIFlag, etc.)
@@ -92,7 +93,13 @@ src/
 │                                 #   TIMESTAMP_COLUMNS, TEXT_COLUMNS, IDENTIFIER_COLUMNS
 ├── store/
 │   └── useStore.ts               # Zustand store: projects[], runs[], activeProjectId,
-│                                 #   activeRunId, aiConfig, currentScreen
+│                                 #   activeRunId, aiConfig, currentScreen, reportingEmails
+│                                 #   aiConfig shape: { provider, apiKey, modelId,
+│                                 #     reportingWebhookUrl, powerAutomateUrl }
+│                                 #   reportingEmails: Record<workCenter, emailAddress>
+├── hooks/
+│   └── useRunAutoRestore.ts      # Restores DuckDB data for a run on mount if hasDataInDB=false;
+│                                 #   used by AuditReportScreen and ReportingSettingsScreen
 ├── services/
 │   ├── FileParser.ts             # PapaParse + XLSX → ParsedFile
 │   ├── SchemaDetector.ts         # Keyword-scoring column mapping → ColumnMap
@@ -103,6 +110,7 @@ src/
 │   │                             #   getLiveScopeCount(), createAnalysisScopeView(),
 │   │                             #   ai_flags table management
 │   ├── AIService.ts              # Provider-agnostic AI calls, fetchModels(), TieredModels
+│   ├── IndexedDBService.ts       # IndexedDB persistence layer for large run data
 │   └── FailureCatalogService.ts  # Loads bundled/user failure catalog into DuckDB
 ├── analysis/
 │   ├── AnalysisEngine.ts         # Orchestrates pipeline: createAnalysisScopeView →
@@ -123,6 +131,7 @@ src/
     │                             #   auto date filter computation → DataProfiler
     ├── DataProfiler.tsx          # Profile results, auto-filter banner, live scope count,
     │                             #   cascading filter options, Run Pre-Checks trigger
+    ├── DataViewScreen.tsx        # Raw WO data table view (scope-filtered)
     ├── PreChecksView.tsx         # Rule check results before AI analysis
     ├── AuditDashboard.tsx        # Summary dashboard: stat cards, charts, re-run,
     │                             #   live scope count + cascading filters,
@@ -142,7 +151,11 @@ src/
     │                             #     operation desc, confirmation; "Row N" label per row flag)
     ├── FilterPanel.tsx           # Audit Scope filter controls:
     │                             #   Date / Work Center / Catalog / Func. Location / Equipment
-    └── SettingsScreen.tsx        # AI provider/model/key config with live model fetching
+    ├── AuditReportScreen.tsx     # Power Automate report distribution (see Reporting section)
+    ├── ReportingSettingsScreen.tsx # Per-work-center email address assignment; queries
+    │                             #   v_wo_primary for WC list, stores in reportingEmails
+    └── SettingsScreen.tsx        # AI provider/model/key config + reportingWebhookUrl +
+                                  #   powerAutomateUrl (Copilot) with live model fetching
 ```
 
 ### Project & Run Lifecycle
@@ -282,3 +295,68 @@ When `run.hasDataInDB` is false (cold reload), `AuditDashboard` restores charts 
 - Inter (sans) + JetBrains Mono (mono) fonts
 - Custom `<Icon>` component — no third-party icon lib; available icons listed in `IconName` type in `Icon.tsx` (includes `copy`, `check`, `chevronDown/Up/Right/Left`, etc.)
 - `animate-enter`, `scroll-thin` CSS classes defined in `index.html`
+
+### Power Automate Reporting
+
+`AuditReportScreen.tsx` drives a one-click email distribution flow per work center. It queries DuckDB for the WC list (with WO numbers via `STRING_AGG`), cross-references in-memory `run.aiFlags` and `run.ruleChecks.flaggedWOs` to compute per-WC flag distributions, then fires an HTTP POST to the configured Power Automate webhook URL.
+
+**HTTP payload** (single JSON body, all values are strings):
+```json
+{
+  "emailTo": "owner@example.com",
+  "subject": "Reliability Audit Report — {Work Center Description}",
+  "emailBody": "<pre style=\"white-space:pre-wrap;font-family:monospace;...\">...plain text...</pre>",
+  "dashboardJson": "{...stringified dashboard payload...}"
+}
+```
+
+`emailBody` is plain text wrapped in a `<pre>` tag so newlines survive HTML email rendering. `dashboardJson` is the stringified dashboard payload (see below).
+
+**Power Automate side:** A "Send an email" action uses `triggerBody()?['emailBody']` as the HTML body. The `dashboard.html` attachment is built with:
+```
+replace(html_template_string, '##AUDIT_DATA##', triggerBody()?['dashboardJson'])
+```
+
+**`dashboard.html` injection point** — the entire JSON payload is injected between script tags:
+```html
+<script id="audit-data" type="application/json">##AUDIT_DATA##</script>
+```
+`DOMContentLoaded` parses this block and renders all charts (pure SVG, zero external deps).
+
+**`buildDashboardPayload(wc: WorkCenterAuditData)`** returns:
+```typescript
+{
+  project: { name, type, period },
+  run: { periodLabel, fileName, lastAnalysedAt, analysisFilters },
+  kpi: { totalWOs, ruleFlaggedWOs, aiFlaggedWOs, totalAIFlags, cleanWOs },
+  errorDistribution: [{ key, label, value, type: 'Rule' | 'AI' }],
+  codeQuality: null,           // pending: requires per-WC DuckDB query
+  overallQuality: { valid, entryQuality, missingFields, total },
+  perWorkCenter: [],           // empty for single-WC report
+  topEquipment: [{ equipment, count }],  // derived from aiFlags for this WC's WOs
+  issues: [{ woNumber, equipment, workCenter, description, codes, ruleFlags, aiFlags }]
+}
+```
+
+**`WorkCenterAuditData` interface:**
+```typescript
+interface WorkCenterAuditData {
+  workCenter: string;
+  description: string;
+  totalWOs: number;
+  ruleFlagsCount: number;
+  aiFlagsCount: number;
+  ruleDistribution: Record<string, number>;   // ruleId → count
+  aiDistribution: Record<string, number>;     // category → count
+  woNumbers: string[];                        // from STRING_AGG in loadWorkCenters()
+}
+```
+
+**`dashboard.html` charts** (all pure SVG, no libraries):
+- Error Distribution: horizontal `<rect>` bars; amber `#f59e0b` for Rule, indigo `#6366f1` for AI
+- Code Quality donut: `stroke-dasharray`/`stroke-dashoffset` circles, `<g transform="rotate(-90 cx cy)">` for 12 o'clock start, 3 px gap between segments
+- Overall Quality donut: same technique; green/indigo/amber
+- Per Work Center grouped bar: `<svg viewBox="0 0 W H" width="100%" height="${H}">` — explicit height prevents proportional scaling bug when SVG is stretched horizontally
+- Top Equipment: flex rows with inline `<div style="width:X%">` bars
+
+**Pending:** `codeQuality` per work center requires a dedicated DuckDB query (schema TBD by user).
