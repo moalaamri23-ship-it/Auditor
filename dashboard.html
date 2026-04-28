@@ -253,7 +253,7 @@
       <div class="meta" id="page-meta">—</div>
     </div>
     <div class="heading-actions">
-      <button class="btn" disabled>
+      <button class="btn" id="btn-comparison" onclick="showComparison()">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7">
           <rect x="1" y="2" width="6" height="12" rx="1"/>
           <rect x="9" y="2" width="6" height="12" rx="1"/>
@@ -346,6 +346,38 @@
 
   </div><!-- /issues-view -->
 
+  <!-- ── COMPARISON VIEW ───────────────────────────────────────────────────── -->
+  <div id="comparison-view" style="display:none" class="animate-enter">
+
+    <div class="back-row">
+      <button class="btn" onclick="showDashboard()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 12L6 8l4-4"/>
+        </svg>
+        Back to Dashboard
+      </button>
+      <span style="font-size:13px;color:var(--sl-400)" id="comparison-run-label"></span>
+    </div>
+
+    <div class="card animate-enter" style="margin-bottom:1.5rem">
+      <div class="card-title">Rule-Based Issue Trends</div>
+      <div class="card-sub">% of total WOs flagged per run — rule checks</div>
+      <div id="chart-cmp-rule" style="margin-top:1rem"></div>
+    </div>
+
+    <div class="card animate-enter" style="margin-bottom:1.5rem">
+      <div class="card-title">AI Flag Trends</div>
+      <div class="card-sub">% of total WOs flagged per run — AI semantic categories</div>
+      <div id="chart-cmp-ai" style="margin-top:1rem"></div>
+    </div>
+
+    <div class="card animate-enter">
+      <div class="card-title">Latest vs Previous Run — Delta</div>
+      <div id="chart-cmp-delta" style="margin-top:1rem"></div>
+    </div>
+
+  </div><!-- /comparison-view -->
+
 </div><!-- /page -->
 
 <!-- ═══════════════════════════════════════════════════════════════════════ SCRIPT -->
@@ -375,7 +407,19 @@ function showIssues() {
 function showDashboard() {
   $('dashboard-view').style.display = '';
   $('issues-view').style.display = 'none';
+  $('comparison-view').style.display = 'none';
   $('btn-issues').classList.remove('btn-active');
+  $('btn-comparison').classList.remove('btn-active');
+}
+function showComparison() {
+  $('dashboard-view').style.display = 'none';
+  $('issues-view').style.display = 'none';
+  $('comparison-view').style.display = '';
+  $('btn-comparison').classList.add('btn-active');
+  $('btn-issues').classList.remove('btn-active');
+}
+function showIssuesFromBack() {
+  showIssues();
 }
 function switchTab(tab) {
   $('tab-rule-content').style.display = tab === 'rule' ? '' : 'none';
@@ -652,7 +696,169 @@ document.addEventListener('DOMContentLoaded', () => {
   $('tab-ai-content').innerHTML = aiIssues.length
     ? aiIssues.map((issue, idx) => issueCard('a' + idx, issue, 'ai')).join('')
     : `<p class="empty">No AI-flagged work orders in this run.</p>`;
+
+  // ── Comparison view ─────────────────────────────────────────────────────────
+  const cmp = D.comparison;
+  if (!cmp || cmp.runs.length < 2) {
+    $('btn-comparison').disabled = true;
+    $('btn-comparison').title = 'Comparison requires at least 2 analysed runs';
+    $('btn-comparison').style.opacity = '0.45';
+    $('btn-comparison').style.cursor  = 'not-allowed';
+  } else {
+    $('comparison-run-label').textContent = `${cmp.runs.length} runs`;
+
+    const RULE_LBL = {
+      missing_confirmation:   'Missing Confirmation',
+      not_listed_codes:       '"Not Listed" Codes',
+      missing_scoping_text:   'Missing Scoping Text',
+      catalog_invalid_object_part:     'Invalid Object Part',
+      catalog_invalid_damage_for_part: 'Invalid Damage',
+      catalog_invalid_cause_for_damage:'Invalid Cause',
+      catalog_missing_match:           'Catalog Missing',
+    };
+    const AI_LBL = {
+      desc_code_conflict:              'Desc–Code Conflict',
+      false_not_listed:                'False Not Listed',
+      desc_confirmation_mismatch:      'Desc–Conf. Mismatch',
+      desc_code_confirmation_misalign: 'Full Misalignment',
+      generic_description:             'Generic Desc.',
+      generic_confirmation:            'Generic Conf.',
+    };
+    const PALETTE = ['#6366f1','#f59e0b','#22c55e','#ef4444','#a855f7','#14b8a6','#f97316','#3b82f6'];
+
+    renderLineChart($('chart-cmp-rule'), cmp.runs, 'ruleCategories', RULE_LBL, PALETTE);
+    renderLineChart($('chart-cmp-ai'),   cmp.runs, 'aiCategories',   AI_LBL,   PALETTE);
+    renderDeltaTable($('chart-cmp-delta'), cmp.runs, RULE_LBL, AI_LBL);
+  }
 });
+
+/* ── Comparison: SVG line chart ───────────────────────────────────────────── */
+function renderLineChart(container, runs, categoryKey, labelMap, palette) {
+  // Collect all category keys that have at least one non-zero value
+  const allKeys = [...new Set(runs.flatMap(r => Object.keys(r[categoryKey] || {})))]
+    .filter(k => runs.some(r => (r[categoryKey]?.[k] ?? 0) > 0));
+
+  if (!allKeys.length || runs.length < 2) {
+    container.innerHTML = '<p class="empty">No data available for this view.</p>';
+    return;
+  }
+
+  const W = 680, H = 240, PL = 48, PR = 16, PT = 16, PB = 56;
+  const innerW = W - PL - PR, innerH = H - PT - PB;
+  const xStep = allKeys.length > 0 ? innerW / (runs.length - 1) : innerW;
+
+  // Compute max percentage across all series
+  let maxPct = 0;
+  for (const r of runs) {
+    for (const k of allKeys) {
+      const pct = r.totalWOs > 0 ? ((r[categoryKey]?.[k] ?? 0) / r.totalWOs) * 100 : 0;
+      if (pct > maxPct) maxPct = pct;
+    }
+  }
+  maxPct = Math.max(maxPct, 5);
+  const yMax = Math.ceil(maxPct / 5) * 5;
+
+  // Y-axis grid lines (5 lines)
+  let gridSvg = '';
+  for (let i = 0; i <= 4; i++) {
+    const yVal = (yMax * i) / 4;
+    const y = PT + innerH - (yVal / yMax) * innerH;
+    gridSvg += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W - PR}" y2="${y.toFixed(1)}" stroke="#e2e8f0" stroke-width="1"/>`;
+    gridSvg += `<text x="${PL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="9" fill="#94a3b8">${yVal.toFixed(0)}%</text>`;
+  }
+
+  // X-axis labels
+  let xLabelSvg = '';
+  runs.forEach((r, i) => {
+    const x = PL + i * xStep;
+    const lbl = esc(r.periodLabel || ('Run ' + r.runIndex));
+    xLabelSvg += `<text x="${x.toFixed(1)}" y="${(H - 8).toFixed(1)}" text-anchor="middle" font-size="9" fill="#64748b" transform="rotate(-30,${x.toFixed(1)},${(H - 8).toFixed(1)})">${lbl}</text>`;
+  });
+
+  // Polylines per category
+  let linesSvg = '';
+  let legendSvg = '';
+  allKeys.forEach((k, ki) => {
+    const color = palette[ki % palette.length];
+    const pts = runs.map((r, i) => {
+      const pct = r.totalWOs > 0 ? ((r[categoryKey]?.[k] ?? 0) / r.totalWOs) * 100 : 0;
+      const x = PL + i * xStep;
+      const y = PT + innerH - (pct / yMax) * innerH;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    linesSvg += `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    // Dots
+    runs.forEach((r, i) => {
+      const pct = r.totalWOs > 0 ? ((r[categoryKey]?.[k] ?? 0) / r.totalWOs) * 100 : 0;
+      const x = PL + i * xStep;
+      const y = PT + innerH - (pct / yMax) * innerH;
+      linesSvg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}" stroke="#fff" stroke-width="1.5"/>`;
+    });
+    // Legend row
+    const legendY = ki * 18;
+    legendSvg += `<rect x="0" y="${legendY}" width="12" height="3" rx="1.5" fill="${color}"/>`;
+    legendSvg += `<text x="16" y="${legendY + 3}" font-size="10" fill="#475569">${esc(labelMap[k] || k)}</text>`;
+  });
+
+  const legendH = allKeys.length * 18 + 4;
+  container.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+      ${gridSvg}${linesSvg}${xLabelSvg}
+    </svg>
+    <svg viewBox="0 0 300 ${legendH}" width="300" style="display:block;margin:8px auto 0">
+      ${legendSvg}
+    </svg>`;
+}
+
+/* ── Comparison: delta table (latest vs previous run) ────────────────────── */
+function renderDeltaTable(container, runs, ruleLabelMap, aiLabelMap) {
+  if (runs.length < 2) { container.innerHTML = '<p class="empty">Need at least 2 runs.</p>'; return; }
+  const prev = runs[runs.length - 2];
+  const curr = runs[runs.length - 1];
+  const allKeys = [...new Set([
+    ...Object.keys(prev.ruleCategories || {}),
+    ...Object.keys(curr.ruleCategories || {}),
+    ...Object.keys(prev.aiCategories  || {}),
+    ...Object.keys(curr.aiCategories  || {}),
+  ])];
+
+  const rows = allKeys.map(k => {
+    const isRule = k in (ruleLabelMap);
+    const prevCount = isRule ? (prev.ruleCategories?.[k] ?? 0) : (prev.aiCategories?.[k] ?? 0);
+    const currCount = isRule ? (curr.ruleCategories?.[k] ?? 0) : (curr.aiCategories?.[k] ?? 0);
+    const prevPct = prev.totalWOs > 0 ? (prevCount / prev.totalWOs) * 100 : 0;
+    const currPct = curr.totalWOs > 0 ? (currCount / curr.totalWOs) * 100 : 0;
+    const delta = currPct - prevPct;
+    if (prevCount === 0 && currCount === 0) return null;
+    const label = ruleLabelMap[k] || aiLabelMap[k] || k;
+    const type  = isRule ? 'Rule' : 'AI';
+    const dir   = delta < -0.05 ? '▼' : delta > 0.05 ? '▲' : '—';
+    const clr   = delta < -0.05 ? '#22c55e' : delta > 0.05 ? '#ef4444' : '#94a3b8';
+    return `<tr>
+      <td style="padding:6px 10px;font-size:12px;color:#334155">${esc(label)}</td>
+      <td style="padding:6px 10px;font-size:11px;color:#94a3b8;text-align:center">${type}</td>
+      <td style="padding:6px 10px;font-size:12px;font-family:monospace;text-align:right">${prevCount}</td>
+      <td style="padding:6px 10px;font-size:12px;font-family:monospace;text-align:right">${currCount}</td>
+      <td style="padding:6px 10px;font-size:12px;font-weight:700;color:${clr};text-align:center">${dir} ${Math.abs(delta).toFixed(1)}%</td>
+    </tr>`;
+  }).filter(Boolean);
+
+  if (!rows.length) { container.innerHTML = '<p class="empty">No flagged categories in either run.</p>'; return; }
+
+  container.innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="border-bottom:1px solid #e2e8f0">
+          <th style="padding:6px 10px;font-size:11px;text-align:left;color:#64748b">Category</th>
+          <th style="padding:6px 10px;font-size:11px;text-align:center;color:#64748b">Type</th>
+          <th style="padding:6px 10px;font-size:11px;text-align:right;color:#64748b">${esc(prev.periodLabel || 'Previous')}</th>
+          <th style="padding:6px 10px;font-size:11px;text-align:right;color:#64748b">${esc(curr.periodLabel || 'Current')}</th>
+          <th style="padding:6px 10px;font-size:11px;text-align:center;color:#64748b">Change</th>
+        </tr>
+      </thead>
+      <tbody>${rows.join('')}</tbody>
+    </table>`;
+}
 
 /* ── Build a single issue card ────────────────────────────────────────────── */
 function issueCard(id, issue, mode) {

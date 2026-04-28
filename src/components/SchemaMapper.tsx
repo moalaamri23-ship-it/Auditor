@@ -54,19 +54,20 @@ async function computeAutoFilters(
 
   if (prevDateMax) {
     const candidateFrom = addDays(prevDateMax, 1);
+    const candidateTo   = addDays(candidateFrom, PERIOD_DAYS[period] - 1);
     try {
       const [row] = await query(
         `SELECT COUNT(*) AS cnt FROM audit WHERE notification_date >= '${candidateFrom}'::DATE`
       );
       if (Number(row?.cnt ?? 0) > 0) {
-        return { ...EMPTY_FILTERS, dateFrom: candidateFrom, dateTo: null };
+        return { ...EMPTY_FILTERS, dateFrom: candidateFrom, dateTo: candidateTo };
       }
     } catch { /* fall through */ }
   }
 
-  // Fall back to last <period> of new data
+  // Fall back to last <period> of new data (window is exactly PERIOD_DAYS wide inclusive)
   if (profile.dateRange?.max) {
-    const dateFrom = addDays(profile.dateRange.max, -PERIOD_DAYS[period]);
+    const dateFrom = addDays(profile.dateRange.max, -(PERIOD_DAYS[period] - 1));
     return { ...EMPTY_FILTERS, dateFrom, dateTo: profile.dateRange.max };
   }
 
@@ -140,8 +141,8 @@ export default function SchemaMapper() {
           project.period,
         ).catch(() => null);
       } else if (project && !prevRun && profile.dateRange?.max) {
-        // First run of a periodic project — default to last period of data
-        const dateFrom = addDays(profile.dateRange.max, -PERIOD_DAYS[project.period]);
+        // First run of a periodic project — default to last period of data (exactly PERIOD_DAYS wide)
+        const dateFrom = addDays(profile.dateRange.max, -(PERIOD_DAYS[project.period] - 1));
         autoFilters = { ...EMPTY_FILTERS, dateFrom, dateTo: profile.dateRange.max };
       }
 

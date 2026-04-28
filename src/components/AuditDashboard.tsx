@@ -7,7 +7,7 @@ import Icon from './Icon';
 import FilterPanel from './FilterPanel';
 import { useActiveRun, useActiveProject, useStore, useRunsForProject } from '../store/useStore';
 import { runPipeline } from '../analysis/AnalysisEngine';
-import { getFilterOptions, getCascadingFilterOptions, getLiveScopeCount, failureCatalogStats, queryAIFlags, query } from '../services/DuckDBService';
+import { getFilterOptions, getCascadingFilterOptions, getLiveScopeCount, createAnalysisScopeView, failureCatalogStats, queryAIFlags, query } from '../services/DuckDBService';
 import { RULE_CHECK_LABELS } from '../analysis/RuleChecksModule';
 import { FLAG_CATEGORY_LABELS } from '../analysis/AITextModule';
 import type {
@@ -262,6 +262,21 @@ export default function AuditDashboard() {
     byCategory: Partial<Record<FlagCategory, number>>;
   } | null>(null);
 
+  // Live scope stats — computed from filtered in-memory flags when filters change without re-run
+  const [liveStats, setLiveStats] = useState<{
+    totalWOs: number;
+    ruleFlagged: number;
+    aiFlagged: number;
+    totalAIFlags: number;
+    cleanWOs: number;
+    filteredAIFlags: AIFlag[];
+    filteredRuleWOs: Array<{ wo: string; checks: RuleCheckId[] }>;
+    filteredPerCheck: Partial<Record<RuleCheckId, number>>;
+    filteredByCategory: Partial<Record<FlagCategory, number>>;
+  } | null>(null);
+  // Incrementing this triggers chart re-queries after the scope view is rebuilt
+  const [scopeVersion, setScopeVersion] = useState(0);
+
   // Visual cross-filter state
   const [visualSelection, setVisualSelection] = useState<VisualSelection>(null);
 
@@ -272,8 +287,10 @@ export default function AuditDashboard() {
     if (run?.analysisFilters) setFilters(run.analysisFilters);
   }, [run?.id]);
 
-  // Reset visual selection when run or filters change
+  // Reset live stats, scope version, and visual selection when run changes or analysis reruns
   useEffect(() => {
+    setLiveStats(null);
+    setScopeVersion(0);
     setVisualSelection(null);
   }, [run?.id, run?.lastAnalysedAt]);
 
@@ -286,16 +303,60 @@ export default function AuditDashboard() {
     }).catch(() => {});
   }, [run?.hasDataInDB, run?.id]);
 
-  // Debounced: update live count + cascading options whenever filters change
+  // Debounced: rebuild scope view, update live stats + cascading options whenever filters change
   useEffect(() => {
     if (!run?.hasDataInDB || !run.columnMap || !baseFilterOptions) return;
     const t = setTimeout(async () => {
-      const [count, cascaded] = await Promise.all([
-        getLiveScopeCount(filters, run.columnMap, project),
-        getCascadingFilterOptions(filters, run.columnMap, project, baseFilterOptions),
-      ]);
-      setLiveScopeCount(count);
-      setFilterOptions(cascaded);
+      try {
+        const [count, cascaded] = await Promise.all([
+          createAnalysisScopeView(filters, run.columnMap!, project),
+          getCascadingFilterOptions(filters, run.columnMap!, project, baseFilterOptions),
+        ]);
+        setLiveScopeCount(count);
+        setFilterOptions(cascaded);
+
+        // Query scope WO set to filter in-memory flags
+        const woRows = await query('SELECT work_order_number FROM v_analysis_scope');
+        const scopeWoSet = new Set(woRows.map((r) => String(r.work_order_number ?? '')));
+
+        const filteredAIFlags = (run.aiFlags ?? []).filter((f) => scopeWoSet.has(f.woNumber));
+        const filteredRuleWOs = (run.ruleChecks?.flaggedWOs ?? []).filter((fw) => scopeWoSet.has(fw.wo));
+
+        const aiSet = new Set(filteredAIFlags.map((f) => f.woNumber));
+        const ruleSet = new Set(filteredRuleWOs.map((f) => f.wo));
+        const allFlagged = new Set([...aiSet, ...ruleSet]);
+
+        const filteredPerCheck: Partial<Record<RuleCheckId, number>> = {};
+        for (const fw of filteredRuleWOs) {
+          for (const checkId of fw.checks) {
+            filteredPerCheck[checkId] = (filteredPerCheck[checkId] ?? 0) + 1;
+          }
+        }
+        const filteredByCategory: Partial<Record<FlagCategory, number>> = {};
+        for (const f of filteredAIFlags) {
+          filteredByCategory[f.category] = (filteredByCategory[f.category] ?? 0) + 1;
+        }
+
+        setLiveStats({
+          totalWOs: count,
+          ruleFlagged: ruleSet.size,
+          aiFlagged: aiSet.size,
+          totalAIFlags: filteredAIFlags.length,
+          cleanWOs: Math.max(0, count - allFlagged.size),
+          filteredAIFlags,
+          filteredRuleWOs,
+          filteredPerCheck,
+          filteredByCategory,
+        });
+        // Clear visual selection since the scope changed
+        setVisualSelection(null);
+        // Trigger chart re-queries (charts read from v_analysis_scope which is now rebuilt)
+        setScopeVersion((v) => v + 1);
+      } catch {
+        // On error fall back to live count only
+        const count = await getLiveScopeCount(filters, run.columnMap!, project).catch(() => null);
+        if (count !== null) setLiveScopeCount(count);
+      }
     }, 250);
     return () => clearTimeout(t);
   }, [filters, run?.hasDataInDB, run?.id, baseFilterOptions, project]);
@@ -510,7 +571,7 @@ export default function AuditDashboard() {
         setOverallQuality({ valid: Math.max(0, total - eq - mf), entryQuality: eq, missingFields: mf, total });
       }
     })();
-  }, [run?.id, run?.hasDataInDB, run?.lastAnalysedAt, visualSelection]);
+  }, [run?.id, run?.hasDataInDB, run?.lastAnalysedAt, visualSelection, scopeVersion]);
 
   // ── Error Distribution cross-filter + Overall Quality filtered update ────────
   useEffect(() => {
@@ -663,7 +724,7 @@ export default function AuditDashboard() {
           <h1 className="text-3xl font-bold text-slate-900">Audit Results</h1>
           <p className="text-sm text-slate-500 mt-1">
             {project?.name ?? 'Project'} · Run #{run.runIndex} · {run.periodLabel} ·{' '}
-            {run.ruleChecks.totalWOs.toLocaleString()} WOs in scope
+            {(liveStats?.totalWOs ?? liveScopeCount ?? run.ruleChecks.totalWOs).toLocaleString()} WOs in scope
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -707,46 +768,84 @@ export default function AuditDashboard() {
         </div>
       )}
 
-      <SummaryRow ruleChecks={run.ruleChecks} aiFlagSummary={run.aiFlagSummary} aiFlags={run.aiFlags ?? []} />
+      {/* When liveStats is available (scope filtered without re-run), derive display values from it */}
+      {(() => {
+        const displayRuleChecks = liveStats
+          ? { ...run.ruleChecks, totalWOs: liveStats.totalWOs, flaggedWOs: liveStats.filteredRuleWOs }
+          : run.ruleChecks;
+        const displayAISummary: AIFlagSummary | null = liveStats
+          ? {
+              totalFlagged: liveStats.aiFlagged,
+              totalFlags: liveStats.totalAIFlags,
+              byCategory: liveStats.filteredByCategory,
+              generatedAt: run.aiFlagSummary?.generatedAt ?? '',
+              scopeWOCount: liveStats.totalWOs,
+            }
+          : run.aiFlagSummary;
+        const displayAIFlags = liveStats ? liveStats.filteredAIFlags : (run.aiFlags ?? []);
+        // Error dist: visual selection takes priority, otherwise show scope-filtered counts
+        const displayFilteredErrorDist = (!visualSelection && liveStats)
+          ? { perCheck: liveStats.filteredPerCheck, byCategory: liveStats.filteredByCategory }
+          : filteredErrorDist;
+        // Overall quality: scope-filtered when liveStats available and no visual selection
+        const displayOverallQuality = (liveStats && !visualSelection)
+          ? (() => {
+              const aiSet = new Set(liveStats.filteredAIFlags.map((f) => f.woNumber));
+              const ruleSet = new Set(liveStats.filteredRuleWOs.map((f) => f.wo));
+              return {
+                valid: liveStats.cleanWOs,
+                entryQuality: aiSet.size,
+                missingFields: [...ruleSet].filter((w) => !aiSet.has(w)).length,
+                total: liveStats.totalWOs,
+              };
+            })()
+          : overallQuality;
 
-      <ChartCard
-        title="Error Distribution"
-        subtitle="Counts per category — both rule-based and AI-detected"
-        hint={visualSelection?.type === 'flagCategory' ? `Filtered: ${visualSelection.value}` : undefined}
-      >
-        <ErrorDistribution
-          ruleChecks={run.ruleChecks}
-          ai={run.aiFlagSummary}
-          filteredErrorDist={filteredErrorDist}
-          visualSelection={visualSelection}
-          onSelect={(key) => handleVisualClick('flagCategory', key)}
-        />
-      </ChartCard>
+        return (
+          <>
+            <SummaryRow ruleChecks={displayRuleChecks} aiFlagSummary={displayAISummary} aiFlags={displayAIFlags} />
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <ChartCard
-          title="Code Quality Breakdown"
-          subtitle="State of the Object/Damage/Cause description fields"
-          hint={visualSelection?.type === 'codeQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
-        >
-          <CodeQualityDonut
-            data={codeQuality}
-            visualSelection={visualSelection}
-            onSelect={(name) => handleVisualClick('codeQualitySegment', name)}
-          />
-        </ChartCard>
-        <ChartCard
-          title="Overall Quality"
-          subtitle="WOs by flag status — Valid, text quality, or missing fields"
-          hint={visualSelection?.type === 'overallQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
-        >
-          <OverallQualityRing
-            data={overallQuality}
-            visualSelection={visualSelection}
-            onSelect={(name) => handleVisualClick('overallQualitySegment', name)}
-          />
-        </ChartCard>
-      </div>
+            <ChartCard
+              title="Error Distribution"
+              subtitle="Counts per category — both rule-based and AI-detected"
+              hint={visualSelection?.type === 'flagCategory' ? `Filtered: ${visualSelection.value}` : undefined}
+            >
+              <ErrorDistribution
+                ruleChecks={displayRuleChecks}
+                ai={displayAISummary}
+                filteredErrorDist={displayFilteredErrorDist}
+                visualSelection={visualSelection}
+                onSelect={(key) => handleVisualClick('flagCategory', key)}
+              />
+            </ChartCard>
+
+            <div className="grid lg:grid-cols-2 gap-6">
+              <ChartCard
+                title="Code Quality Breakdown"
+                subtitle="State of the Object/Damage/Cause description fields"
+                hint={visualSelection?.type === 'codeQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
+              >
+                <CodeQualityDonut
+                  data={codeQuality}
+                  visualSelection={visualSelection}
+                  onSelect={(name) => handleVisualClick('codeQualitySegment', name)}
+                />
+              </ChartCard>
+              <ChartCard
+                title="Overall Quality"
+                subtitle="WOs by flag status — Valid, text quality, or missing fields"
+                hint={visualSelection?.type === 'overallQualitySegment' ? `Filtered: ${visualSelection.value}` : undefined}
+              >
+                <OverallQualityRing
+                  data={displayOverallQuality}
+                  visualSelection={visualSelection}
+                  onSelect={(name) => handleVisualClick('overallQualitySegment', name)}
+                />
+              </ChartCard>
+            </div>
+          </>
+        );
+      })()}
 
       <div className="grid lg:grid-cols-2 gap-6">
         <ChartCard

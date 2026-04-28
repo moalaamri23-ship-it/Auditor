@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Icon from './Icon';
 import FilterPanel from './FilterPanel';
-import { useActiveRun, useActiveProject, useStore } from '../store/useStore';
+import { useActiveRun, useActiveProject, useStore, useRunsForProject } from '../store/useStore';
 import { useRunAutoRestore } from '../hooks/useRunAutoRestore';
 import {
   query,
@@ -128,6 +128,7 @@ async function loadWorkCenters(
 export default function AuditReportScreen() {
   const run = useActiveRun();
   const project = useActiveProject();
+  const projectRuns = useRunsForProject(run?.projectId ?? null);
   const { reportingEmails, aiConfig, setScreen } = useStore();
 
   useRunAutoRestore(run);
@@ -217,9 +218,12 @@ export default function AuditReportScreen() {
   };
 
   const getEmailText = (wc: WorkCenterAuditData): string => {
-    const period = (filters.dateFrom || filters.dateTo)
-      ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}`
-      : 'All time';
+    // Fall back to actual data date range when no explicit filter dates are set
+    const dateFrom = filters.dateFrom || run?.dataProfile?.dateRange?.min || null;
+    const dateTo   = filters.dateTo   || run?.dataProfile?.dateRange?.max || null;
+    const period = (dateFrom || dateTo)
+      ? `${dateFrom || 'Start'} to ${dateTo || 'End'}`
+      : (run?.periodLabel || 'All time');
     const projectName = project?.name || 'Reliability Audit';
     const periodLabel = run?.periodLabel || '';
     const now = new Date().toLocaleDateString('en-GB', {
@@ -352,6 +356,26 @@ export default function AuditReportScreen() {
       .slice(0, 10)
       .map(([equipment, count]) => ({ equipment, count }));
 
+    // Code quality derived from rule check classifications (no DuckDB query needed)
+    const notListedWOs = new Set(
+      wcRuleWOs.filter(fw => fw.checks.includes('not_listed_codes')).map(fw => fw.wo));
+    const invalidHierarchyWOs = new Set(
+      wcRuleWOs.filter(fw =>
+        fw.checks.some(c => ['catalog_invalid_object_part', 'catalog_invalid_damage_for_part', 'catalog_invalid_cause_for_damage'].includes(c))
+      ).map(fw => fw.wo));
+    const missingCodeWOs = new Set(
+      wcRuleWOs.filter(fw =>
+        fw.checks.some(c => ['catalog_missing_match', 'missing_scoping_text'].includes(c)) &&
+        !notListedWOs.has(fw.wo) && !invalidHierarchyWOs.has(fw.wo)
+      ).map(fw => fw.wo));
+    const allCodeIssueWOs = new Set([...notListedWOs, ...invalidHierarchyWOs, ...missingCodeWOs]);
+    const codeQuality = {
+      valid: wc.totalWOs - allCodeIssueWOs.size,
+      notListed: notListedWOs.size,
+      invalidHierarchy: invalidHierarchyWOs.size,
+      missing: missingCodeWOs.size,
+    };
+
     const issues = [...allFlaggedSet].map(woNumber => {
       const flagsForWO = wcAIFlags.filter(f => f.woNumber === woNumber);
       const ruleEntry  = wcRuleWOs.find(fw => fw.wo === woNumber);
@@ -374,6 +398,22 @@ export default function AuditReportScreen() {
       };
     });
 
+    // Build comparison data from all analysed runs in this project
+    const analysedRuns = projectRuns
+      .filter(r => r.stage === 'analysed' && r.ruleChecks)
+      .sort((a, b) => a.runIndex - b.runIndex);
+    const comparison = analysedRuns.length >= 2 ? {
+      runs: analysedRuns.map(r => ({
+        runIndex:       r.runIndex,
+        periodLabel:    r.periodLabel,
+        totalWOs:       r.ruleChecks!.totalWOs,
+        ruleCategories: Object.fromEntries(
+          Object.entries(r.ruleChecks!.perCheck ?? {}).map(([k, v]) => [k, (v as { matched: number }).matched ?? 0])
+        ),
+        aiCategories: r.aiFlagSummary?.byCategory ?? {},
+      }))
+    } : null;
+
     return {
       project: {
         name:   project?.name   ?? '',
@@ -395,11 +435,12 @@ export default function AuditReportScreen() {
         cleanWOs,
       },
       errorDistribution,
-      codeQuality:   null, // requires per-WC DuckDB query — to be added with schema
+      codeQuality,
       overallQuality,
       perWorkCenter: [{ workCenter: wc.workCenter, total: wc.totalWOs, flagged: allFlaggedSet.size }],
       topEquipment,
       issues,
+      comparison,
     };
   };
 
@@ -419,7 +460,7 @@ export default function AuditReportScreen() {
         body: JSON.stringify({
           emailTo,
           subject: `Reliability Audit Report — ${wc.description || wc.workCenter}`,
-          emailBody: `<pre style="font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.7;color:#1e293b;white-space:pre-wrap;background:none;border:none;padding:0;margin:0">${getEmailText(wc)}</pre>`,
+          emailBody: `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc"><tr><td align="center" style="padding:32px 16px"><div style="display:inline-block;text-align:left;max-width:680px;width:100%"><pre style="font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.7;color:#1e293b;white-space:pre-wrap;background:none;border:none;padding:0;margin:0">${getEmailText(wc)}</pre></div></td></tr></table>`,
           dashboardJson: JSON.stringify(buildDashboardPayload(wc)),
         }),
       });
