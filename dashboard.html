@@ -526,7 +526,7 @@ function renderGroupedBar(container, data) {
     <text x="${PAD.left + 63}" y="14" font-size="10" fill="#6366f1">Flagged</text>`;
 
   container.innerHTML = `
-    <svg viewBox="0 0 ${svgW} ${H}" style="width:100%;min-width:${svgW}px;overflow:visible;display:block">
+    <svg viewBox="0 0 ${svgW} ${H}" width="100%" height="${H}" style="min-width:${svgW}px;overflow:visible;display:block">
       ${legend}${grid}${bars}${labels}
     </svg>`;
 }
