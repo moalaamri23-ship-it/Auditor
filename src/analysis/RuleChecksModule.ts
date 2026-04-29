@@ -118,6 +118,19 @@ export async function runRuleChecks(opts: RuleCheckOptions): Promise<RuleCheckRe
     );
   }
 
+  // 4. Missing codes — all three code description fields blank (no catalog required)
+  if (has('object_part_code_description') && has('damage_code_description') && has('cause_code_description')) {
+    await runCheck(
+      'missing_codes',
+      woCol,
+      `(object_part_code_description IS NULL OR TRIM(CAST(object_part_code_description AS VARCHAR)) = '')
+       AND (damage_code_description IS NULL OR TRIM(CAST(damage_code_description AS VARCHAR)) = '')
+       AND (cause_code_description IS NULL OR TRIM(CAST(cause_code_description AS VARCHAR)) = '')`,
+    );
+  } else {
+    perCheck['missing_codes'] = { matched: 0, sampleWOs: [] };
+  }
+
   const flaggedWOs = Array.from(flaggedMap.entries()).map(([wo, set]) => ({
     wo,
     checks: Array.from(set),
@@ -146,5 +159,10 @@ export const RULE_CHECK_LABELS: Record<RuleCheckId, { label: string; severity: '
     label: 'Missing Scoping Text',
     severity: 'MEDIUM',
     description: 'Description was written ad-hoc (no Code Group / scoping template selected).',
+  },
+  missing_codes: {
+    label: 'Missing Codes',
+    severity: 'MEDIUM',
+    description: 'Work orders with all three code description fields (Object Part, Damage, Cause) left blank.',
   },
 };

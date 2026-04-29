@@ -28,6 +28,7 @@ export const useStore = create<AppState>()(
         reportingWebhookUrl: '',
       },
       reportingEmails: {},
+      emailTemplate: null,
 
       // ── Transient UI state (reset on load) ──────────
       currentScreen: 'projects' as Screen,
@@ -162,6 +163,10 @@ export const useStore = create<AppState>()(
           reportingEmails: { ...state.reportingEmails, [workCenter]: email },
         }));
       },
+
+      setEmailTemplate: (template: string | null) => {
+        set({ emailTemplate: template });
+      },
     }),
     {
       name: STORAGE_KEYS.STORE,
@@ -171,6 +176,7 @@ export const useStore = create<AppState>()(
         activeProjectId: state.activeProjectId,
         activeRunId: state.activeRunId,
         aiConfig: state.aiConfig,
+        emailTemplate: state.emailTemplate,
       }),
     }
   )

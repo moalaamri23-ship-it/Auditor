@@ -17,6 +17,7 @@ const RULE_LABELS: Record<string, string> = {
   missing_confirmation: 'Missing Confirmation',
   not_listed_codes:     '"Not Listed" Codes',
   missing_scoping_text: 'Missing Scoping Text',
+  missing_codes:        'Missing Codes',
 };
 
 const AI_LABELS: Record<string, string> = {
@@ -160,13 +161,76 @@ async function loadWorkCenters(
   return [wcData, woDetailMap];
 }
 
+// ─── Email template system ────────────────────────────────────────────────────
+
+export const DEFAULT_EMAIL_TEMPLATE = [
+  '{Sep}',
+  '  RELIABILITY AUDIT REPORT — {ProjectName}',
+  '  Work Center: {WorkCenterLabel}',
+  '  Period: {PeriodLabel}  |  Generated: {GeneratedDate}',
+  '{Sep}',
+  '',
+  'Audit Scope: {AuditScope}',
+  '',
+  '',
+  'SUMMARY',
+  '{Dash}',
+  'This is an automated Reliability Audit summary for Work',
+  'Center {WorkCenter}. A full interactive dashboard is',
+  'attached to this email — open it in any web browser to',
+  'view charts, per-category breakdowns, and the complete',
+  'list of flagged work orders with AI comments.',
+  '',
+  '',
+  'FINDINGS',
+  '{Dash}',
+  '  Total Work Orders Analyzed    {TotalWOs}',
+  '  Work Orders — Rule Flags      {TotalRuleFlaggedWOs}',
+  '  Work Orders — AI Flags        {TotalAIFlaggedWOs}',
+  '',
+  '',
+  '{ErrorDistSection}',
+  '',
+  '',
+  'ACTION REQUIRED',
+  '{Dash}',
+  'Please review the flagged work orders for Work Center',
+  '{WorkCenter} using the attached dashboard and apply',
+  'the necessary corrections in SAP, prioritising:',
+  '',
+  '  1. HIGH-severity AI flags (misleading or conflicting data)',
+  '  2. Missing Confirmation (no closure text recorded)',
+  '  3. "Not Listed" Codes (incomplete failure coding)',
+  '',
+  '',
+  '{Sep}',
+  '  SAP Reliability Auditor  ·  {GeneratedDate}',
+  '  This message was generated automatically. Do not reply.',
+  '{Sep}',
+].join('\n');
+
+const TEMPLATE_FIELD_REFERENCE = [
+  { key: '{ProjectName}',         label: 'Project Name',             example: 'Q1 2026 Reliability Audit' },
+  { key: '{WorkCenterLabel}',     label: 'Work Center (with desc)',   example: 'A100 (Mechanical)' },
+  { key: '{PeriodLabel}',         label: 'Period Label',             example: '01 Jan – 31 Mar 2026' },
+  { key: '{GeneratedDate}',       label: 'Generated Date',           example: '29 Apr 2026' },
+  { key: '{AuditScope}',          label: 'Audit Scope (date range)', example: '01 Jan 2026 to 31 Mar 2026' },
+  { key: '{WorkCenter}',          label: 'Work Center ID',           example: 'A100' },
+  { key: '{TotalWOs}',            label: 'Total WOs Analyzed',       example: '245' },
+  { key: '{TotalRuleFlaggedWOs}', label: 'Rule-Flagged WOs',         example: '12' },
+  { key: '{TotalAIFlaggedWOs}',   label: 'AI-Flagged WOs',           example: '8' },
+  { key: '{ErrorDistSection}',    label: 'Error Distribution Block', example: '(auto-generated table)' },
+  { key: '{Sep}',                 label: 'Separator line (═ × 58)',  example: '══════…' },
+  { key: '{Dash}',                label: 'Section divider (─ × 42)', example: '──────…' },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function AuditReportScreen() {
   const run = useActiveRun();
   const project = useActiveProject();
   const projectRuns = useRunsForProject(run?.projectId ?? null);
-  const { reportingEmails, aiConfig, setScreen } = useStore();
+  const { reportingEmails, aiConfig, setScreen, emailTemplate, setEmailTemplate } = useStore();
 
   useRunAutoRestore(run);
 
@@ -181,6 +245,7 @@ export default function AuditReportScreen() {
   const [selectedWCs, setSelectedWCs] = useState<Set<string>>(new Set());
   const [previewWC, setPreviewWC] = useState<WorkCenterAuditData | null>(null);
   const [sendingStatus, setSendingStatus] = useState<Record<string, 'sending' | 'success' | 'error'>>({});
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   // ── Effect 1: load filter options on mount ──────────────────────────────────
   useEffect(() => {
@@ -257,10 +322,9 @@ export default function AuditReportScreen() {
   };
 
   const getEmailText = (wc: WorkCenterAuditData): string => {
-    // Fall back to actual data date range when no explicit filter dates are set
     const dateFrom = filters.dateFrom || run?.dataProfile?.dateRange?.min || null;
     const dateTo   = filters.dateTo   || run?.dataProfile?.dateRange?.max || null;
-    const period = (dateFrom || dateTo)
+    const scope = (dateFrom || dateTo)
       ? `${dateFrom || 'Start'} to ${dateTo || 'End'}`
       : (run?.periodLabel || 'All time');
     const projectName = project?.name || 'Reliability Audit';
@@ -272,85 +336,43 @@ export default function AuditReportScreen() {
     const dash = '-'.repeat(42);
     const wcLabel = wc.description ? `${wc.workCenter} (${wc.description})` : wc.workCenter;
 
-    // Helper: left-pad a label to a fixed width for aligned columns
     const distLine = (label: string, count: number) =>
       `    ${label.padEnd(38)}${count} WO${count !== 1 ? 's' : ''}`;
 
-    // Build rule distribution lines (skip zero counts)
     const ruleLines = Object.entries(wc.ruleDistribution)
       .filter(([, v]) => v > 0)
       .sort(([, a], [, b]) => b - a)
       .map(([key, val]) => distLine(RULE_LABELS[key] ?? key, val));
 
-    // Build AI distribution lines (skip zero counts)
     const aiLines = Object.entries(wc.aiDistribution)
       .filter(([, v]) => v > 0)
       .sort(([, a], [, b]) => b - a)
       .map(([key, val]) => distLine(AI_LABELS[key] ?? key, val));
 
     const hasAnyFlags = wc.ruleFlagsCount > 0 || wc.aiFlagsCount > 0;
-
-    const errorDistSection: string[] = [
-      'ERROR DISTRIBUTION',
-      dash,
-    ];
-
+    const errorDistLines: string[] = ['ERROR DISTRIBUTION', dash];
     if (!hasAnyFlags) {
-      errorDistSection.push('  No issues detected for this work center.');
+      errorDistLines.push('  No issues detected for this work center.');
     } else {
-      if (ruleLines.length > 0) {
-        errorDistSection.push('  Rule-Based Issues:', ...ruleLines, '');
-      }
-      if (aiLines.length > 0) {
-        errorDistSection.push('  AI-Detected Issues:', ...aiLines);
-      }
+      if (ruleLines.length > 0) errorDistLines.push('  Rule-Based Issues:', ...ruleLines, '');
+      if (aiLines.length > 0)  errorDistLines.push('  AI-Detected Issues:', ...aiLines);
     }
+    const errorDistSection = errorDistLines.join('\n');
 
-    return [
-      sep,
-      `  RELIABILITY AUDIT REPORT — ${projectName}`,
-      `  Work Center: ${wcLabel}`,
-      `  Period: ${periodLabel || period}  |  Generated: ${now}`,
-      sep,
-      '',
-      `Audit Scope: ${period}`,
-      '',
-      '',
-      'SUMMARY',
-      dash,
-      `This is an automated Reliability Audit summary for Work`,
-      `Center ${wc.workCenter}. A full interactive dashboard is`,
-      `attached to this email — open it in any web browser to`,
-      `view charts, per-category breakdowns, and the complete`,
-      `list of flagged work orders with AI comments.`,
-      '',
-      '',
-      'FINDINGS',
-      dash,
-      `  ${'Total Work Orders Analyzed'.padEnd(30)}${wc.totalWOs}`,
-      `  ${'Work Orders — Rule Flags'.padEnd(30)}${wc.ruleFlagsCount}`,
-      `  ${'Work Orders — AI Flags'.padEnd(30)}${wc.aiFlagsCount}`,
-      '',
-      '',
-      ...errorDistSection,
-      '',
-      '',
-      'ACTION REQUIRED',
-      dash,
-      `Please review the flagged work orders for Work Center`,
-      `${wc.workCenter} using the attached dashboard and apply`,
-      `the necessary corrections in SAP, prioritising:`,
-      '',
-      `  1. HIGH-severity AI flags (misleading or conflicting data)`,
-      `  2. Missing Confirmation (no closure text recorded)`,
-      `  3. "Not Listed" Codes (incomplete failure coding)`,
-      '',
-      '',
-      sep,
-      `  SAP Reliability Auditor  ·  ${now}`,
-      `  This message was generated automatically. Do not reply.`,
-      sep,
-    ].join('\n');
+    const template = emailTemplate ?? DEFAULT_EMAIL_TEMPLATE;
+    return template
+      .replace(/{Sep}/g,                sep)
+      .replace(/{Dash}/g,               dash)
+      .replace(/{ProjectName}/g,        projectName)
+      .replace(/{WorkCenterLabel}/g,    wcLabel)
+      .replace(/{PeriodLabel}/g,        periodLabel || scope)
+      .replace(/{GeneratedDate}/g,      now)
+      .replace(/{AuditScope}/g,         scope)
+      .replace(/{WorkCenter}/g,         wc.workCenter)
+      .replace(/{TotalWOs}/g,           String(wc.totalWOs))
+      .replace(/{TotalRuleFlaggedWOs}/g, String(wc.ruleFlagsCount))
+      .replace(/{TotalAIFlaggedWOs}/g,  String(wc.aiFlagsCount))
+      .replace(/{ErrorDistSection}/g,   errorDistSection);
   };
 
   const buildDashboardPayload = (wc: WorkCenterAuditData) => {
@@ -516,7 +538,7 @@ export default function AuditReportScreen() {
         body: JSON.stringify({
           emailTo,
           subject: `Reliability Audit Report — ${wc.description || wc.workCenter}`,
-          emailBody: `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc"><tr><td align="center" style="padding:32px 16px"><div style="display:inline-block;text-align:left;max-width:680px;width:100%"><pre style="font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.7;color:#1e293b;white-space:pre-wrap;background:none;border:none;padding:0;margin:0">${getEmailText(wc)}</pre></div></td></tr></table>`,
+          emailBody: `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc"><tr><td align="center" valign="top" style="padding:32px 16px"><table cellpadding="0" cellspacing="0" border="0" align="center" style="max-width:680px;width:100%"><tr><td align="left" valign="top"><pre style="font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.7;color:#1e293b;white-space:pre-wrap;background:none;border:none;padding:0;margin:0">${getEmailText(wc)}</pre></td></tr></table></td></tr></table>`,
           dashboardJson: JSON.stringify(buildDashboardPayload(wc)),
         }),
       });
@@ -534,6 +556,7 @@ export default function AuditReportScreen() {
   if (!run) return <div className="p-10 text-slate-500">No active run.</div>;
 
   return (
+    <>
     <div className="flex flex-col h-full bg-slate-50">
       {/* ── Top bar ── */}
       <div className="bg-white border-b shrink-0 px-6 py-4 shadow-sm z-20 relative" style={{ overflow: 'visible' }}>
@@ -545,12 +568,23 @@ export default function AuditReportScreen() {
             </h1>
             <p className="text-sm text-slate-500 mt-1">Filter scope and dispatch summary reports to Work Center owners.</p>
           </div>
-          <button
-            onClick={() => setScreen('reporting-settings')}
-            className="px-4 py-2 text-sm border border-slate-300 rounded font-bold hover:bg-slate-50 transition flex items-center gap-2"
-          >
-            <Icon name="gear" className="w-4 h-4" /> Reporting Settings
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowTemplateModal(true)}
+              className="px-4 py-2 text-sm border border-slate-300 rounded font-bold hover:bg-slate-50 transition flex items-center gap-2"
+            >
+              <Icon name="wand" className="w-4 h-4" /> Customize Template
+              {emailTemplate && (
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-indigo-100 text-indigo-700 rounded">Custom</span>
+              )}
+            </button>
+            <button
+              onClick={() => setScreen('reporting-settings')}
+              className="px-4 py-2 text-sm border border-slate-300 rounded font-bold hover:bg-slate-50 transition flex items-center gap-2"
+            >
+              <Icon name="gear" className="w-4 h-4" /> Reporting Settings
+            </button>
+          </div>
         </div>
 
         {filterOptions ? (
@@ -718,6 +752,106 @@ export default function AuditReportScreen() {
               <p>Select <strong>Preview</strong> on a Work Center to see its email summary here.</p>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+
+    {showTemplateModal && (
+      <TemplateEditorModal
+        initial={emailTemplate ?? DEFAULT_EMAIL_TEMPLATE}
+        onSave={(t) => setEmailTemplate(t)}
+        onClose={() => setShowTemplateModal(false)}
+      />
+    )}
+    </>
+  );
+}
+
+// ─── Template editor modal ────────────────────────────────────────────────────
+
+function TemplateEditorModal({
+  initial,
+  onSave,
+  onClose,
+}: {
+  initial: string;
+  onSave: (t: string) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState(initial);
+  const [showRef, setShowRef] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Email Template Editor</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Edit the free text around <span className="font-mono bg-slate-100 px-1 rounded text-slate-700">{'{PLACEHOLDER}'}</span> markers — those are replaced with live data when the email is sent.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition p-1 rounded">
+            <Icon name="x" className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 min-h-0">
+          <textarea
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            className="w-full font-mono text-xs text-slate-800 border border-slate-300 rounded p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 leading-relaxed"
+            rows={28}
+            spellCheck={false}
+          />
+
+          {/* Field Reference */}
+          <div className="border border-slate-200 rounded">
+            <button
+              onClick={() => setShowRef(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition rounded"
+            >
+              Field Reference — available placeholders
+              <Icon name={showRef ? 'chevronUp' : 'chevronDown'} className="w-3.5 h-3.5" />
+            </button>
+            {showRef && (
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 p-4 border-t border-slate-100">
+                {TEMPLATE_FIELD_REFERENCE.map(f => (
+                  <div key={f.key} className="flex items-start gap-2 text-xs">
+                    <code className="shrink-0 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-mono text-[11px]">{f.key}</code>
+                    <span className="text-slate-600">{f.label} <span className="text-slate-400">— e.g. {f.example}</span></span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t shrink-0 bg-slate-50 rounded-b-xl">
+          <button
+            onClick={() => setDraft(DEFAULT_EMAIL_TEMPLATE)}
+            className="px-3 py-2 text-sm border border-slate-300 rounded font-bold text-red-600 hover:bg-red-50 hover:border-red-300 transition"
+          >
+            Reset to Default
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm border border-slate-300 rounded font-bold hover:bg-slate-100 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => { onSave(draft); onClose(); }}
+              className="px-4 py-2 text-sm bg-brand-600 text-white rounded font-bold hover:bg-brand-700 transition"
+            >
+              Save Template
+            </button>
+          </div>
         </div>
       </div>
     </div>

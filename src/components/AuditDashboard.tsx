@@ -24,7 +24,7 @@ const CQ_COLORS: Record<string, string> = {
   'Valid':             '#22c55e',
   'Not Listed':        '#f59e0b',
   'Invalid Hierarchy': '#ef4444',
-  'Missing':           '#94a3b8',
+  'Missing Codes':     '#94a3b8',
 };
 const OQ_COLORS: Record<string, string> = {
   'Clean WOs':           '#22c55e',
@@ -69,7 +69,7 @@ function buildVisualScopeWhere(
           return `${p}<>'' AND ${d}<>'' AND ${c}<>'' AND ${p} NOT LIKE 'NOT LISTED%' AND ${d} NOT LIKE 'NOT LISTED%' AND ${c} NOT LIKE 'NOT LISTED%'`;
         case 'Not Listed':
           return `(${p} LIKE 'NOT LISTED%' OR ${d} LIKE 'NOT LISTED%' OR ${c} LIKE 'NOT LISTED%')`;
-        case 'Missing':
+        case 'Missing Codes':
           return `${p}='' AND ${d}='' AND ${c}=''`;
         case 'Invalid Hierarchy':
           return `work_order_number IN (SELECT wo_number FROM ai_flags WHERE category = 'desc_code_conflict')`;
@@ -1199,7 +1199,7 @@ function CodeQualityDonut({
     { name: 'Valid',             value: data.valid },
     { name: 'Not Listed',        value: data.notListed },
     { name: 'Invalid Hierarchy', value: data.invalidHierarchy },
-    { name: 'Missing',           value: data.missing },
+    { name: 'Missing Codes',     value: data.missing },
   ].filter((r) => r.value > 0);
   if (rows.length === 0) return <Empty />;
   const total = rows.reduce((s, r) => s + r.value, 0);

@@ -359,21 +359,25 @@
       <span style="font-size:13px;color:var(--sl-400)" id="comparison-run-label"></span>
     </div>
 
+    <!-- Runs strip -->
+    <div style="background:white;border:1px solid #e2e8f0;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:12px;overflow-x:auto;margin-bottom:1.5rem" class="animate-enter">
+      <div id="cmp-runs-strip" style="display:flex;gap:8px;min-width:max-content"></div>
+    </div>
+
+    <!-- Delta panel -->
+    <div style="background:white;border:1px solid #e2e8f0;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:16px;margin-bottom:1.5rem" class="animate-enter">
+      <div id="cmp-delta-header" style="font-weight:700;font-size:13px;color:#334155;margin-bottom:12px"></div>
+      <div id="cmp-delta-panel" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px"></div>
+    </div>
+
     <div class="card animate-enter" style="margin-bottom:1.5rem">
-      <div class="card-title">Rule-Based Issue Trends</div>
-      <div class="card-sub">% of total WOs flagged per run — rule checks</div>
+      <div class="card-title">Rule-Based Pre-Checks (% of WOs)</div>
       <div id="chart-cmp-rule" style="margin-top:1rem"></div>
     </div>
 
-    <div class="card animate-enter" style="margin-bottom:1.5rem">
-      <div class="card-title">AI Flag Trends</div>
-      <div class="card-sub">% of total WOs flagged per run — AI semantic categories</div>
-      <div id="chart-cmp-ai" style="margin-top:1rem"></div>
-    </div>
-
     <div class="card animate-enter">
-      <div class="card-title">Latest vs Previous Run — Delta</div>
-      <div id="chart-cmp-delta" style="margin-top:1rem"></div>
+      <div class="card-title">AI Semantic Categories (% of WOs)</div>
+      <div id="chart-cmp-ai" style="margin-top:1rem"></div>
     </div>
 
   </div><!-- /comparison-view -->
@@ -755,13 +759,10 @@ document.addEventListener('DOMContentLoaded', () => {
     $('comparison-run-label').textContent = `${cmp.runs.length} runs`;
 
     const RULE_LBL = {
-      missing_confirmation:   'Missing Confirmation',
-      not_listed_codes:       '"Not Listed" Codes',
-      missing_scoping_text:   'Missing Scoping Text',
-      catalog_invalid_object_part:     'Invalid Object Part',
-      catalog_invalid_damage_for_part: 'Invalid Damage',
-      catalog_invalid_cause_for_damage:'Invalid Cause',
-      catalog_missing_match:           'Catalog Missing',
+      missing_confirmation: 'Missing Confirmation',
+      not_listed_codes:     '"Not Listed" Codes',
+      missing_scoping_text: 'Missing Scoping Text',
+      missing_codes:        'Missing Codes',
     };
     const AI_LBL = {
       desc_code_conflict:              'Desc–Code Conflict',
@@ -773,9 +774,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const PALETTE = ['#6366f1','#f59e0b','#22c55e','#ef4444','#a855f7','#14b8a6','#f97316','#3b82f6'];
 
+    const prev = cmp.runs[cmp.runs.length - 2];
+    const curr = cmp.runs[cmp.runs.length - 1];
+    $('comparison-run-label').textContent = `${cmp.runs.length} runs`;
+    $('cmp-delta-header').innerHTML =
+      `Latest vs Previous &mdash; <span style="font-weight:400;color:#94a3b8">#${prev.runIndex} ${esc(prev.periodLabel || 'Previous')} &rarr; #${curr.runIndex} ${esc(curr.periodLabel || 'Current')}</span>`;
+
+    renderRunsStrip($('cmp-runs-strip'), cmp.runs);
+    renderDeltaPanel($('cmp-delta-panel'), cmp.runs, RULE_LBL, AI_LBL);
     renderLineChart($('chart-cmp-rule'), cmp.runs, 'ruleCategories', RULE_LBL, PALETTE);
     renderLineChart($('chart-cmp-ai'),   cmp.runs, 'aiCategories',   AI_LBL,   PALETTE);
-    renderDeltaTable($('chart-cmp-delta'), cmp.runs, RULE_LBL, AI_LBL);
   }
 });
 
@@ -857,54 +865,58 @@ function renderLineChart(container, runs, categoryKey, labelMap, palette) {
     </svg>`;
 }
 
-/* ── Comparison: delta table (latest vs previous run) ────────────────────── */
-function renderDeltaTable(container, runs, ruleLabelMap, aiLabelMap) {
+/* ── Comparison: runs strip ───────────────────────────────────────────────── */
+function renderRunsStrip(container, runs) {
+  container.innerHTML = runs.map(r => {
+    const allFlaggedRule = Object.values(r.ruleCategories || {}).reduce((s, v) => s + v, 0);
+    const allFlaggedAI   = Object.values(r.aiCategories   || {}).reduce((s, v) => s + v, 0);
+    const flagged = allFlaggedRule + allFlaggedAI;
+    return `<div style="text-align:left;padding:8px 12px;border-radius:6px;border:1px solid #e2e8f0;min-width:180px;cursor:default">
+      <div style="font-family:monospace;font-size:10px;color:#94a3b8">RUN #${r.runIndex}</div>
+      <div style="font-weight:700;font-size:13px;color:#1e293b;margin:2px 0">${esc(r.periodLabel || ('Run ' + r.runIndex))}</div>
+      <div style="font-size:10px;color:#64748b">${fmt(r.totalWOs)} WOs &middot; ${fmt(flagged)} flagged</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Comparison: delta panel (latest vs previous run) ────────────────────── */
+function renderDeltaPanel(container, runs, ruleLabelMap, aiLabelMap) {
   if (runs.length < 2) { container.innerHTML = '<p class="empty">Need at least 2 runs.</p>'; return; }
   const prev = runs[runs.length - 2];
   const curr = runs[runs.length - 1];
+
   const allKeys = [...new Set([
     ...Object.keys(prev.ruleCategories || {}),
     ...Object.keys(curr.ruleCategories || {}),
-    ...Object.keys(prev.aiCategories  || {}),
-    ...Object.keys(curr.aiCategories  || {}),
+    ...Object.keys(prev.aiCategories   || {}),
+    ...Object.keys(curr.aiCategories   || {}),
   ])];
 
-  const rows = allKeys.map(k => {
-    const isRule = k in (ruleLabelMap);
+  const cards = allKeys.map(k => {
+    const isRule   = k in ruleLabelMap;
     const prevCount = isRule ? (prev.ruleCategories?.[k] ?? 0) : (prev.aiCategories?.[k] ?? 0);
     const currCount = isRule ? (curr.ruleCategories?.[k] ?? 0) : (curr.aiCategories?.[k] ?? 0);
-    const prevPct = prev.totalWOs > 0 ? (prevCount / prev.totalWOs) * 100 : 0;
-    const currPct = curr.totalWOs > 0 ? (currCount / curr.totalWOs) * 100 : 0;
-    const delta = currPct - prevPct;
     if (prevCount === 0 && currCount === 0) return null;
-    const label = ruleLabelMap[k] || aiLabelMap[k] || k;
-    const type  = isRule ? 'Rule' : 'AI';
-    const dir   = delta < -0.05 ? '▼' : delta > 0.05 ? '▲' : '—';
-    const clr   = delta < -0.05 ? '#22c55e' : delta > 0.05 ? '#ef4444' : '#94a3b8';
-    return `<tr>
-      <td style="padding:6px 10px;font-size:12px;color:#334155">${esc(label)}</td>
-      <td style="padding:6px 10px;font-size:11px;color:#94a3b8;text-align:center">${type}</td>
-      <td style="padding:6px 10px;font-size:12px;font-family:monospace;text-align:right">${prevCount}</td>
-      <td style="padding:6px 10px;font-size:12px;font-family:monospace;text-align:right">${currCount}</td>
-      <td style="padding:6px 10px;font-size:12px;font-weight:700;color:${clr};text-align:center">${dir} ${Math.abs(delta).toFixed(1)}%</td>
-    </tr>`;
+    const prevPct  = prev.totalWOs > 0 ? (prevCount / prev.totalWOs) * 100 : 0;
+    const currPct  = curr.totalWOs > 0 ? (currCount / curr.totalWOs) * 100 : 0;
+    const delta    = currPct - prevPct;
+    const label    = ruleLabelMap[k] || aiLabelMap[k] || k;
+    const arrow    = delta < -0.1 ? '↓' : delta > 0.1 ? '↑' : '→';
+    const clr      = delta < -0.1 ? '#16a34a' : delta > 0.1 ? '#dc2626' : '#64748b';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border:1px solid #f1f5f9;border-radius:6px;font-size:12px">
+      <span style="color:#334155">${esc(label)}</span>
+      <span style="font-family:monospace;white-space:nowrap">
+        <span style="color:#94a3b8">${prevPct.toFixed(1)}%</span>
+        <span style="color:#64748b"> → </span>
+        <span style="font-weight:700;color:#1e293b">${currPct.toFixed(1)}%</span>
+        <span style="font-weight:700;color:${clr};margin-left:6px">${arrow} ${Math.abs(delta).toFixed(1)} pts</span>
+      </span>
+    </div>`;
   }).filter(Boolean);
 
-  if (!rows.length) { container.innerHTML = '<p class="empty">No flagged categories in either run.</p>'; return; }
-
-  container.innerHTML = `
-    <table style="width:100%;border-collapse:collapse">
-      <thead>
-        <tr style="border-bottom:1px solid #e2e8f0">
-          <th style="padding:6px 10px;font-size:11px;text-align:left;color:#64748b">Category</th>
-          <th style="padding:6px 10px;font-size:11px;text-align:center;color:#64748b">Type</th>
-          <th style="padding:6px 10px;font-size:11px;text-align:right;color:#64748b">${esc(prev.periodLabel || 'Previous')}</th>
-          <th style="padding:6px 10px;font-size:11px;text-align:right;color:#64748b">${esc(curr.periodLabel || 'Current')}</th>
-          <th style="padding:6px 10px;font-size:11px;text-align:center;color:#64748b">Change</th>
-        </tr>
-      </thead>
-      <tbody>${rows.join('')}</tbody>
-    </table>`;
+  container.innerHTML = cards.length
+    ? cards.join('')
+    : '<p class="empty" style="grid-column:1/-1">No category has any flags in either run.</p>';
 }
 
 /* ── Build a single issue card ────────────────────────────────────────────── */

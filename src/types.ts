@@ -216,7 +216,8 @@ export interface FailureCatalog {
 export type RuleCheckId =
   | 'missing_confirmation'
   | 'not_listed_codes'
-  | 'missing_scoping_text';
+  | 'missing_scoping_text'
+  | 'missing_codes';
 
 export interface RuleCheckBucket {
   matched: number;
@@ -307,6 +308,7 @@ export interface AppState {
   activeRunId: string | null;
   aiConfig: AIConfig;
   reportingEmails: Record<string, string>;
+  emailTemplate: string | null;
 
   // Transient UI (not persisted)
   currentScreen: Screen;
@@ -335,4 +337,5 @@ export interface AppState {
   setLoading: (loading: boolean, message?: string) => void;
   updateAIConfig: (config: Partial<AIConfig>) => void;
   setReportingEmail: (workCenter: string, email: string) => void;
+  setEmailTemplate: (template: string | null) => void;
 }
