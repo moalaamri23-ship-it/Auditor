@@ -24,7 +24,7 @@ const CQ_COLORS: Record<string, string> = {
   'Valid':             '#22c55e',
   'Not Listed':        '#f59e0b',
   'Invalid Hierarchy': '#ef4444',
-  'Missing Fields':    '#94a3b8',
+  'Missing Codes':     '#94a3b8',
 };
 const OQ_COLORS: Record<string, string> = {
   'Clean WOs':           '#22c55e',
@@ -69,7 +69,7 @@ function buildVisualScopeWhere(
           return `${p}<>'' AND ${d}<>'' AND ${c}<>'' AND ${p} NOT LIKE 'NOT LISTED%' AND ${d} NOT LIKE 'NOT LISTED%' AND ${c} NOT LIKE 'NOT LISTED%'`;
         case 'Not Listed':
           return `(${p} LIKE 'NOT LISTED%' OR ${d} LIKE 'NOT LISTED%' OR ${c} LIKE 'NOT LISTED%')`;
-        case 'Missing Fields':
+        case 'Missing Codes':
           return `${p}='' AND ${d}='' AND ${c}=''`;
         case 'Invalid Hierarchy':
           return `work_order_number IN (SELECT wo_number FROM ai_flags WHERE category = 'desc_code_conflict')`;
@@ -812,8 +812,17 @@ export default function AuditDashboard() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Audit Results</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {project?.name ?? 'Project'} · Run #{run.runIndex} · {run.periodLabel} ·{' '}
-            {(liveStats?.totalWOs ?? liveScopeCount ?? run.ruleChecks.totalWOs).toLocaleString()} WOs in scope
+            {(() => {
+              const fmtD = (s: string | null) => {
+                if (!s) return '';
+                const [y, m, d] = s.split('-');
+                return `${parseInt(m)}/${parseInt(d)}/${y}`;
+              };
+              const df = run.analysisFilters?.dateFrom || run.dataProfile?.dateRange?.min || null;
+              const dt = run.analysisFilters?.dateTo   || run.dataProfile?.dateRange?.max || null;
+              const dateRange = df && dt ? `${fmtD(df)} – ${fmtD(dt)}` : run.periodLabel;
+              return `${project?.name ?? 'Project'} · Run #${run.runIndex} · ${dateRange} · ${(liveStats?.totalWOs ?? liveScopeCount ?? run.ruleChecks.totalWOs).toLocaleString()} WOs in scope`;
+            })()}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -977,6 +986,7 @@ export default function AuditDashboard() {
                   angle={-45}
                   textAnchor="end"
                   interval={0}
+                  dy={6}
                 />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />
@@ -1206,7 +1216,7 @@ function CodeQualityDonut({
     { name: 'Valid',             value: data.valid },
     { name: 'Not Listed',        value: data.notListed },
     { name: 'Invalid Hierarchy', value: data.invalidHierarchy },
-    { name: 'Missing Fields',    value: data.missing },
+    { name: 'Missing Codes',     value: data.missing },
   ].filter((r) => r.value > 0);
   if (rows.length === 0) return <Empty />;
   const total = rows.reduce((s, r) => s + r.value, 0);

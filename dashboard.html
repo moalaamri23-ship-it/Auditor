@@ -635,10 +635,20 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const auditTypeLabel = formatPeriodType(D.project?.period);
 
+  const fmtDateShort = (iso) => {
+    if (!iso) return '';
+    const parts = String(iso).split('-');
+    if (parts.length === 3) return `${parseInt(parts[1])}/${parseInt(parts[2])}/${parts[0]}`;
+    return iso;
+  };
+  const df = D.run?.analysisFilters?.dateFrom || '';
+  const dt = D.run?.analysisFilters?.dateTo   || '';
+  const dateRange = df && dt ? `${fmtDateShort(df)} – ${fmtDateShort(dt)}` : periodLabel;
+
   $('stamp-left').textContent  = `SAP Reliability Auditor — Exported Report`;
   $('stamp-right').textContent = analysedAt;
   $('page-meta').textContent   =
-    `${auditTypeLabel} · ${periodLabel}${wcDesc ? ' · To ' + wcDesc : ''} · ${fmt(totalWOs)} WOs in scope`;
+    `${auditTypeLabel} · ${dateRange}${wcDesc ? ' · To ' + wcDesc : ''} · ${fmt(totalWOs)} WOs in scope`;
 
   // ── KPI cards ────────────────────────────────────────────────────────────
   const kpi = D.kpi || {};
@@ -691,7 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
     { label: 'Valid',             value: cq.valid            || 0, color: '#22c55e' },
     { label: '"Not Listed"',      value: cq.notListed        || 0, color: '#f59e0b' },
     { label: 'Invalid Hierarchy', value: cq.invalidHierarchy || 0, color: '#ef4444' },
-    { label: 'Missing Fields',    value: cq.missing          || 0, color: '#94a3b8' },
+    { label: 'Missing Codes',     value: cq.missing          || 0, color: '#94a3b8' },
   ], fmt(cq.valid || 0), 'Valid');
 
   // ── Overall Quality donut ────────────────────────────────────────────────
@@ -832,7 +842,7 @@ function renderLineChart(container, runs, categoryKey, labelMap, palette) {
 
   // Polylines per category
   let linesSvg = '';
-  let legendSvg = '';
+  const legendItems = [];
   allKeys.forEach((k, ki) => {
     const color = palette[ki % palette.length];
     const pts = runs.map((r, i) => {
@@ -849,20 +859,20 @@ function renderLineChart(container, runs, categoryKey, labelMap, palette) {
       const y = PT + innerH - (pct / yMax) * innerH;
       linesSvg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}" stroke="#fff" stroke-width="1.5"/>`;
     });
-    // Legend row
-    const legendY = ki * 18;
-    legendSvg += `<rect x="0" y="${legendY}" width="12" height="3" rx="1.5" fill="${color}"/>`;
-    legendSvg += `<text x="16" y="${legendY + 3}" font-size="10" fill="#475569">${esc(labelMap[k] || k)}</text>`;
+    // Legend item (HTML, collected separately)
+    legendItems.push(`<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#475569;white-space:nowrap">
+      <div style="width:14px;height:3px;background:${color};border-radius:2px;flex-shrink:0"></div>
+      <span>${esc(labelMap[k] || k)}</span>
+    </div>`);
   });
 
-  const legendH = allKeys.length * 18 + 4;
   container.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:hidden">
+    <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
       ${gridSvg}${linesSvg}${xLabelSvg}
     </svg>
-    <svg viewBox="0 0 300 ${legendH}" width="300" style="display:block;margin:16px auto 0">
-      ${legendSvg}
-    </svg>`;
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin:14px 4px 0;justify-content:center">
+      ${legendItems.join('')}
+    </div>`;
 }
 
 /* ── Comparison: runs strip ───────────────────────────────────────────────── */

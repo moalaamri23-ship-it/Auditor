@@ -390,7 +390,7 @@ export default function AuditReportScreen() {
     const cleanWOs       = wc.totalWOs - allFlaggedSet.size;
 
     const RULE_KEYS = [
-      'missing_confirmation', 'not_listed_codes', 'missing_scoping_text',
+      'missing_confirmation', 'not_listed_codes', 'missing_scoping_text', 'missing_codes',
     ] as const;
     const AI_KEYS = [
       'desc_code_conflict', 'false_not_listed', 'desc_confirmation_mismatch',
@@ -440,7 +440,7 @@ export default function AuditReportScreen() {
       wcAIFlags.filter(f => f.category === 'desc_code_conflict').map(f => f.woNumber));
     const missingCodeWOs = new Set(
       wcRuleWOs.filter(fw =>
-        fw.checks.some(c => ['catalog_missing_match', 'missing_scoping_text'].includes(c)) &&
+        fw.checks.includes('missing_codes') &&
         !notListedWOs.has(fw.wo) && !invalidHierarchyWOs.has(fw.wo)
       ).map(fw => fw.wo));
     const allCodeIssueWOs = new Set([...notListedWOs, ...invalidHierarchyWOs, ...missingCodeWOs]);
