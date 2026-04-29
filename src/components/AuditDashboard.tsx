@@ -804,8 +804,44 @@ export default function AuditDashboard() {
       });
       const flags = results.aiFlagSummary ? await queryAIFlags() : [];
       const chartCache = await _computeChartCache(run.columnMap, results.ruleChecks, flags);
+
+      // Guarantee patch: reconcile ruleChecks with the authoritative missingCodeWOs list
+      // from chartCache (computed via the same CTE that drives the Code Quality donut).
+      // This ensures Error Distribution, IssueExplorer Rule Flags, and dashboard.html all
+      // show Missing Codes consistently even if runRuleChecks() underreported due to a
+      // scope view timing issue.
+      const patchedRuleChecks = (() => {
+        const missingWOs = chartCache.missingCodeWOs ?? [];
+        if (missingWOs.length === 0) return results.ruleChecks;
+        const rc = results.ruleChecks;
+        // Patch perCheck count upward if cache has more
+        const currentCount = rc.perCheck['missing_codes']?.matched ?? 0;
+        const newPerCheck = currentCount >= missingWOs.length ? rc.perCheck : {
+          ...rc.perCheck,
+          missing_codes: { matched: missingWOs.length, sampleWOs: missingWOs.slice(0, 5) },
+        };
+        // Patch flaggedWOs — add/augment entries for any WO in missingWOs not already flagged
+        const flaggedMap = new Map(rc.flaggedWOs.map(fw => [fw.wo, [...fw.checks] as typeof fw.checks]));
+        let patched = false;
+        for (const wo of missingWOs) {
+          const existing = flaggedMap.get(wo);
+          if (existing) {
+            if (!existing.includes('missing_codes')) {
+              existing.push('missing_codes');
+              patched = true;
+            }
+          } else {
+            flaggedMap.set(wo, ['missing_codes']);
+            patched = true;
+          }
+        }
+        if (!patched && currentCount >= missingWOs.length) return rc;
+        const newFlaggedWOs = Array.from(flaggedMap.entries()).map(([wo, checks]) => ({ wo, checks }));
+        return { ...rc, perCheck: newPerCheck, flaggedWOs: newFlaggedWOs };
+      })();
+
       updateRun(run.id, {
-        ruleChecks: results.ruleChecks,
+        ruleChecks: patchedRuleChecks,
         aiFlagSummary: results.aiFlagSummary ?? null,
         aiFlags: flags,
         analysisFilters: filters,
@@ -987,7 +1023,7 @@ export default function AuditDashboard() {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart
                 data={perWorkCenter}
-                margin={{ bottom: 48 }}
+                margin={{ bottom: 68 }}
                 style={{ cursor: 'pointer' }}
                 onClick={(data) => {
                   const wc = data?.activePayload?.[0]?.payload?.workCenter;
@@ -1000,7 +1036,8 @@ export default function AuditDashboard() {
                   angle={-45}
                   textAnchor="end"
                   interval={0}
-                  dy={6}
+                  dy={14}
+                  dx={-4}
                 />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />

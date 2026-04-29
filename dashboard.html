@@ -559,7 +559,7 @@ function renderGroupedBar(container, data) {
   }
 
   const BW = 16, GAP = 4, GROUP_SPACE = 18;
-  const PAD = { top: 20, right: 12, bottom: 56, left: 36 };
+  const PAD = { top: 20, right: 12, bottom: 68, left: 36 };
   const H = 220;
   const groupW   = 2 * BW + GAP;
   const svgW     = PAD.left + data.length * (groupW + GROUP_SPACE) - GROUP_SPACE + PAD.right;
@@ -590,7 +590,7 @@ function renderGroupedBar(container, data) {
       width="${BW}" height="${+fh.toFixed(1)}" fill="#6366f1" rx="2"/>`;
 
     const lx = +(gx + BW).toFixed(1);
-    const ly = +(baseY + 10).toFixed(1);
+    const ly = +(baseY + 16).toFixed(1);
     labels += `<text x="${lx}" y="${ly}" text-anchor="end" font-size="9" fill="#64748b"
       transform="rotate(-40 ${lx} ${ly})">${esc(d.workCenter)}</text>`;
   });

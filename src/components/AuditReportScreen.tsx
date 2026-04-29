@@ -48,6 +48,7 @@ async function loadWorkCenters(
   filters: AnalysisFilters,
   aiFlags: AIFlag[],
   ruleChecks: RuleCheckResult | null,
+  missingCodeWOs: string[],
 ): Promise<[WorkCenterAuditData[], Map<string, WODetail>]> {
   const hasWC = !!columnMap.work_center;
   if (!hasWC) return [[], new Map()];
@@ -102,6 +103,11 @@ async function loadWorkCenters(
           ruleDistribution[checkId] = (ruleDistribution[checkId] ?? 0) + 1;
         }
       }
+    }
+    // Guarantee patch for missing_codes using chartCache (authoritative source)
+    const cacheMissingCount = missingCodeWOs.filter(wo => woSet.has(wo)).length;
+    if (cacheMissingCount > (ruleDistribution['missing_codes'] ?? 0)) {
+      ruleDistribution['missing_codes'] = cacheMissingCount;
     }
 
     // AI distribution: unique flagged WOs per category
@@ -514,6 +520,7 @@ export default function AuditReportScreen() {
           filters,
           run.aiFlags ?? [],
           run.ruleChecks ?? null,
+          run.chartCache?.missingCodeWOs ?? [],
         );
         setWcData(data);
         setWoDetailMap(detailMap);
