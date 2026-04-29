@@ -209,19 +209,58 @@ export const DEFAULT_EMAIL_TEMPLATE = [
   '{Sep}',
 ].join('\n');
 
-const TEMPLATE_FIELD_REFERENCE = [
-  { key: '{ProjectName}',         label: 'Project Name',             example: 'Q1 2026 Reliability Audit' },
-  { key: '{WorkCenterLabel}',     label: 'Work Center (with desc)',   example: 'A100 (Mechanical)' },
-  { key: '{PeriodLabel}',         label: 'Period Label',             example: '01 Jan – 31 Mar 2026' },
-  { key: '{GeneratedDate}',       label: 'Generated Date',           example: '29 Apr 2026' },
-  { key: '{AuditScope}',          label: 'Audit Scope (date range)', example: '01 Jan 2026 to 31 Mar 2026' },
-  { key: '{WorkCenter}',          label: 'Work Center ID',           example: 'A100' },
-  { key: '{TotalWOs}',            label: 'Total WOs Analyzed',       example: '245' },
-  { key: '{TotalRuleFlaggedWOs}', label: 'Rule-Flagged WOs',         example: '12' },
-  { key: '{TotalAIFlaggedWOs}',   label: 'AI-Flagged WOs',           example: '8' },
-  { key: '{ErrorDistSection}',    label: 'Error Distribution Block', example: '(auto-generated table)' },
-  { key: '{Sep}',                 label: 'Separator line (═ × 58)',  example: '══════…' },
-  { key: '{Dash}',                label: 'Section divider (─ × 42)', example: '──────…' },
+interface FieldRef { group: string; key: string; label: string; description: string; example: string; }
+
+const TEMPLATE_FIELD_REFERENCE: FieldRef[] = [
+  // ── Context ──────────────────────────────────────────────────────────────────
+  { group: 'Context', key: '{ProjectName}',          label: 'Project Name',              description: 'Audit project name as configured',                        example: 'Q1 2026 Reliability Audit' },
+  { group: 'Context', key: '{WorkCenter}',            label: 'Work Center ID',            description: 'SAP work center code',                                    example: 'A100' },
+  { group: 'Context', key: '{WorkCenterLabel}',       label: 'Work Center (with desc)',   description: 'Work center ID and description combined',                  example: 'A100 (Mechanical)' },
+  { group: 'Context', key: '{WorkCenterDescription}', label: 'Work Center Description',   description: 'Description text of the work center',                     example: 'Mechanical Maintenance' },
+  { group: 'Context', key: '{PeriodLabel}',           label: 'Period Label',              description: 'Audit run period label',                                   example: '2026-BW1' },
+  { group: 'Context', key: '{GeneratedDate}',         label: 'Generated Date',            description: 'Date the email was sent',                                  example: '29 Apr 2026' },
+  { group: 'Context', key: '{AuditScope}',            label: 'Audit Scope (date range)',  description: 'Date range covered by this audit run',                     example: '1 Jan 2026 to 14 Jan 2026' },
+  // ── Summary KPIs ─────────────────────────────────────────────────────────────
+  { group: 'Summary KPIs', key: '{TotalWOs}',             label: 'Total WOs Analyzed',    description: 'Total work orders in scope for this work center',          example: '245' },
+  { group: 'Summary KPIs', key: '{TotalRuleFlaggedWOs}',  label: 'Rule-Flagged WOs',      description: 'WOs with at least one rule-based flag',                   example: '12' },
+  { group: 'Summary KPIs', key: '{TotalAIFlaggedWOs}',    label: 'AI-Flagged WOs',        description: 'WOs with at least one AI semantic flag',                  example: '8' },
+  { group: 'Summary KPIs', key: '{CleanWOs}',             label: 'Clean WOs',             description: 'WOs with no flags of any kind (AI or rule)',               example: '225' },
+  { group: 'Summary KPIs', key: '{RuleFlagPct}',          label: 'Rule-Flagged %',        description: 'Rule-flagged WOs as percentage of total',                 example: '4.9%' },
+  { group: 'Summary KPIs', key: '{AIFlagPct}',            label: 'AI-Flagged %',          description: 'AI-flagged WOs as percentage of total',                   example: '3.3%' },
+  { group: 'Summary KPIs', key: '{CleanPct}',             label: 'Clean %',               description: 'Clean WOs as percentage of total',                        example: '91.8%' },
+  { group: 'Summary KPIs', key: '{TotalFlags}',           label: 'Total Flag Instances',  description: 'Sum of all individual flag hits (AI instances + rule hits)', example: '27' },
+  // ── Rule Checks ──────────────────────────────────────────────────────────────
+  { group: 'Rule Checks', key: '{RuleMissingConfirmation}', label: 'Missing Confirmation',  description: 'WOs with no confirmation text recorded (neither short nor long)',   example: '5' },
+  { group: 'Rule Checks', key: '{RuleNotListedCodes}',      label: '"Not Listed" Codes',    description: 'WOs with at least one "Not Listed" code field',                   example: '3' },
+  { group: 'Rule Checks', key: '{RuleMissingScopingText}',  label: 'Missing Scoping Text',  description: 'WOs with no Code Group — description written ad-hoc',             example: '4' },
+  { group: 'Rule Checks', key: '{RuleMissingCodes}',        label: 'Missing Codes',         description: 'WOs where all three code description fields are blank',           example: '2' },
+  // ── AI Categories ────────────────────────────────────────────────────────────
+  { group: 'AI Categories', key: '{AIDescCodeConflict}',              label: 'Desc–Code Conflict',        description: 'Description identifies failure clearly but codes disagree',              example: '4' },
+  { group: 'AI Categories', key: '{AIFalseNotListed}',                label: 'False "Not Listed"',        description: 'Codes are "Not Listed" but catalog implies a specific entry exists',    example: '2' },
+  { group: 'AI Categories', key: '{AIDescConfirmationMismatch}',      label: 'Desc–Conf Mismatch',        description: 'Description and confirmation text describe different issues',             example: '3' },
+  { group: 'AI Categories', key: '{AIDescCodeConfirmationMisalign}',  label: 'Three-Way Misalignment',    description: 'Description, codes, and confirmation all contradict each other',         example: '1' },
+  { group: 'AI Categories', key: '{AIGenericDescription}',            label: 'Generic Description',       description: 'Description is present but too vague to identify the work request',    example: '5' },
+  { group: 'AI Categories', key: '{AIGenericConfirmation}',           label: 'Generic Confirmation',      description: 'Confirmation is present but provides no useful closure information',   example: '3' },
+  // ── Code Quality ─────────────────────────────────────────────────────────────
+  { group: 'Code Quality', key: '{CQValid}',              label: 'Valid Coded WOs',         description: 'WOs with all three codes present and not set to "Not Listed"',    example: '220' },
+  { group: 'Code Quality', key: '{CQNotListed}',          label: '"Not Listed" WOs',        description: 'WOs with at least one "Not Listed" code field',                  example: '10' },
+  { group: 'Code Quality', key: '{CQInvalidHierarchy}',   label: 'Invalid Hierarchy WOs',   description: 'WOs with a code–description conflict flagged by AI',             example: '5' },
+  { group: 'Code Quality', key: '{CQMissingCodes}',       label: 'Missing Codes WOs',       description: 'WOs where all three code description fields are blank',          example: '10' },
+  { group: 'Code Quality', key: '{CQValidPct}',           label: 'Valid Coded %',           description: 'Valid coded WOs as percentage of total',                         example: '89.8%' },
+  { group: 'Code Quality', key: '{CQNotListedPct}',       label: '"Not Listed" %',          description: '"Not Listed" WOs as percentage of total',                        example: '4.1%' },
+  { group: 'Code Quality', key: '{CQInvalidHierarchyPct}',label: 'Invalid Hierarchy %',     description: 'Invalid hierarchy WOs as percentage of total',                   example: '2.0%' },
+  { group: 'Code Quality', key: '{CQMissingCodesPct}',    label: 'Missing Codes %',         description: 'Missing codes WOs as percentage of total',                       example: '4.1%' },
+  // ── Overall Quality ──────────────────────────────────────────────────────────
+  { group: 'Overall Quality', key: '{OQClean}',            label: 'Clean WOs',           description: 'WOs with zero flags of any kind (same as Clean WOs KPI)',           example: '225' },
+  { group: 'Overall Quality', key: '{OQEntryQuality}',     label: 'Entry Quality WOs',   description: 'WOs with at least one AI flag — text or semantic quality issue',    example: '8' },
+  { group: 'Overall Quality', key: '{OQMissingFields}',    label: 'Missing Fields WOs',  description: 'WOs with rule flags only and no AI flags',                          example: '12' },
+  { group: 'Overall Quality', key: '{OQCleanPct}',         label: 'Clean %',             description: 'Clean WOs as percentage of total',                                  example: '91.8%' },
+  { group: 'Overall Quality', key: '{OQEntryQualityPct}',  label: 'Entry Quality %',     description: 'Entry quality WOs as percentage of total',                          example: '3.3%' },
+  { group: 'Overall Quality', key: '{OQMissingFieldsPct}', label: 'Missing Fields %',    description: 'Missing fields WOs as percentage of total',                         example: '4.9%' },
+  // ── Formatting ───────────────────────────────────────────────────────────────
+  { group: 'Formatting', key: '{ErrorDistSection}', label: 'Error Distribution Block', description: 'Auto-generated full breakdown of all flagged categories (rule + AI)', example: '(auto-generated table)' },
+  { group: 'Formatting', key: '{Sep}',              label: 'Separator line',           description: '═ repeated 58 times — use as a major section divider',               example: '══════…' },
+  { group: 'Formatting', key: '{Dash}',             label: 'Section divider',          description: '- repeated 42 times — use as a sub-section divider',                 example: '──────…' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -359,20 +398,77 @@ export default function AuditReportScreen() {
     }
     const errorDistSection = errorDistLines.join('\n');
 
+    // Per-WC derived metrics for the extended placeholder set
+    const woSet2        = new Set(wc.woNumbers);
+    const wcAIFlags2    = (run?.aiFlags ?? []).filter(f => woSet2.has(f.woNumber));
+    const wcRuleWOs2    = (run?.ruleChecks?.flaggedWOs ?? []).filter(fw => woSet2.has(fw.wo));
+    const aiFlaggedSet2  = new Set(wcAIFlags2.map(f => f.woNumber));
+    const ruleFlaggedSet2 = new Set(wcRuleWOs2.map(fw => fw.wo));
+    const allFlaggedSet2  = new Set([...aiFlaggedSet2, ...ruleFlaggedSet2]);
+    const cleanWOs       = Math.max(0, wc.totalWOs - allFlaggedSet2.size);
+    const pct = (n: number) => wc.totalWOs > 0 ? (n / wc.totalWOs * 100).toFixed(1) + '%' : '0.0%';
+    const totalFlagInstances = wcRuleWOs2.reduce((s, fw) => s + fw.checks.length, 0) + wcAIFlags2.length;
+
+    // Code Quality (per WC, same derivation as buildDashboardPayload)
+    const cqNotListed = wc.ruleDistribution['not_listed_codes'] ?? 0;
+    const cqMissing   = wc.ruleDistribution['missing_codes']    ?? 0;
+    const cqInvalidH  = new Set(wcAIFlags2.filter(f => f.category === 'desc_code_conflict').map(f => f.woNumber)).size;
+    const cqValid     = Math.max(0, wc.totalWOs - cqNotListed - cqMissing - cqInvalidH);
+
+    // Overall Quality (per WC)
+    const oqEntry   = aiFlaggedSet2.size;
+    const oqMissing = [...ruleFlaggedSet2].filter(wo => !aiFlaggedSet2.has(wo)).length;
+
     const template = emailTemplate ?? DEFAULT_EMAIL_TEMPLATE;
     return template
-      .replace(/{Sep}/g,                sep)
-      .replace(/{Dash}/g,               dash)
-      .replace(/{ProjectName}/g,        projectName)
-      .replace(/{WorkCenterLabel}/g,    wcLabel)
-      .replace(/{PeriodLabel}/g,        periodLabel || scope)
-      .replace(/{GeneratedDate}/g,      now)
-      .replace(/{AuditScope}/g,         scope)
-      .replace(/{WorkCenter}/g,         wc.workCenter)
-      .replace(/{TotalWOs}/g,           String(wc.totalWOs))
-      .replace(/{TotalRuleFlaggedWOs}/g, String(wc.ruleFlagsCount))
-      .replace(/{TotalAIFlaggedWOs}/g,  String(wc.aiFlagsCount))
-      .replace(/{ErrorDistSection}/g,   errorDistSection);
+      .replace(/{Sep}/g,                         sep)
+      .replace(/{Dash}/g,                        dash)
+      .replace(/{ProjectName}/g,                 projectName)
+      .replace(/{WorkCenterLabel}/g,             wcLabel)
+      .replace(/{WorkCenterDescription}/g,       wc.description || wc.workCenter)
+      .replace(/{PeriodLabel}/g,                 periodLabel || scope)
+      .replace(/{GeneratedDate}/g,               now)
+      .replace(/{AuditScope}/g,                  scope)
+      .replace(/{WorkCenter}/g,                  wc.workCenter)
+      // Summary KPIs
+      .replace(/{TotalWOs}/g,                    String(wc.totalWOs))
+      .replace(/{TotalRuleFlaggedWOs}/g,         String(wc.ruleFlagsCount))
+      .replace(/{TotalAIFlaggedWOs}/g,           String(wc.aiFlagsCount))
+      .replace(/{CleanWOs}/g,                    String(cleanWOs))
+      .replace(/{RuleFlagPct}/g,                 pct(wc.ruleFlagsCount))
+      .replace(/{AIFlagPct}/g,                   pct(wc.aiFlagsCount))
+      .replace(/{CleanPct}/g,                    pct(cleanWOs))
+      .replace(/{TotalFlags}/g,                  String(totalFlagInstances))
+      // Rule Checks
+      .replace(/{RuleMissingConfirmation}/g,     String(wc.ruleDistribution['missing_confirmation'] ?? 0))
+      .replace(/{RuleNotListedCodes}/g,          String(wc.ruleDistribution['not_listed_codes']     ?? 0))
+      .replace(/{RuleMissingScopingText}/g,      String(wc.ruleDistribution['missing_scoping_text'] ?? 0))
+      .replace(/{RuleMissingCodes}/g,            String(wc.ruleDistribution['missing_codes']        ?? 0))
+      // AI Categories
+      .replace(/{AIDescCodeConflict}/g,             String(wc.aiDistribution['desc_code_conflict']              ?? 0))
+      .replace(/{AIFalseNotListed}/g,               String(wc.aiDistribution['false_not_listed']                ?? 0))
+      .replace(/{AIDescConfirmationMismatch}/g,     String(wc.aiDistribution['desc_confirmation_mismatch']      ?? 0))
+      .replace(/{AIDescCodeConfirmationMisalign}/g, String(wc.aiDistribution['desc_code_confirmation_misalign'] ?? 0))
+      .replace(/{AIGenericDescription}/g,           String(wc.aiDistribution['generic_description']             ?? 0))
+      .replace(/{AIGenericConfirmation}/g,          String(wc.aiDistribution['generic_confirmation']            ?? 0))
+      // Code Quality
+      .replace(/{CQValid}/g,              String(cqValid))
+      .replace(/{CQNotListed}/g,          String(cqNotListed))
+      .replace(/{CQInvalidHierarchy}/g,   String(cqInvalidH))
+      .replace(/{CQMissingCodes}/g,       String(cqMissing))
+      .replace(/{CQValidPct}/g,           pct(cqValid))
+      .replace(/{CQNotListedPct}/g,       pct(cqNotListed))
+      .replace(/{CQInvalidHierarchyPct}/g,pct(cqInvalidH))
+      .replace(/{CQMissingCodesPct}/g,    pct(cqMissing))
+      // Overall Quality
+      .replace(/{OQClean}/g,             String(cleanWOs))
+      .replace(/{OQEntryQuality}/g,      String(oqEntry))
+      .replace(/{OQMissingFields}/g,     String(oqMissing))
+      .replace(/{OQCleanPct}/g,          pct(cleanWOs))
+      .replace(/{OQEntryQualityPct}/g,   pct(oqEntry))
+      .replace(/{OQMissingFieldsPct}/g,  pct(oqMissing))
+      // Auto-generated section (last — may contain other braces)
+      .replace(/{ErrorDistSection}/g,    errorDistSection);
   };
 
   const buildDashboardPayload = (wc: WorkCenterAuditData) => {
@@ -780,6 +876,49 @@ function TemplateEditorModal({
 }) {
   const [draft, setDraft] = useState(initial);
   const [showRef, setShowRef] = useState(false);
+  const [refSearch, setRefSearch] = useState('');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopy = (key: string) => {
+    navigator.clipboard.writeText(key).catch(() => {});
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1500);
+  };
+
+  // Derive display list: filtered flat or grouped
+  const q = refSearch.trim().toLowerCase();
+  const filtered = q
+    ? TEMPLATE_FIELD_REFERENCE.filter(f =>
+        f.key.toLowerCase().includes(q) ||
+        f.label.toLowerCase().includes(q) ||
+        f.description.toLowerCase().includes(q)
+      )
+    : TEMPLATE_FIELD_REFERENCE;
+
+  // Group map (only used when not searching)
+  const groups = q ? null : Array.from(
+    TEMPLATE_FIELD_REFERENCE.reduce((m, f) => {
+      if (!m.has(f.group)) m.set(f.group, []);
+      m.get(f.group)!.push(f);
+      return m;
+    }, new Map<string, FieldRef[]>())
+  );
+
+  const FieldRow = ({ f }: { f: FieldRef }) => (
+    <div className="flex items-start gap-2 text-xs py-1">
+      <button
+        onClick={() => handleCopy(f.key)}
+        title="Click to copy"
+        className="shrink-0 flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono text-[11px] transition group"
+      >
+        {copiedKey === f.key ? '✓ Copied' : f.key}
+      </button>
+      <span className="text-slate-700 font-medium">{f.label}</span>
+      <span className="text-slate-400 hidden sm:inline">—</span>
+      <span className="text-slate-500 hidden sm:inline">{f.description}</span>
+      <span className="ml-auto shrink-0 bg-slate-100 text-slate-500 px-1 py-0.5 rounded text-[10px] font-mono">{f.example}</span>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -814,17 +953,38 @@ function TemplateEditorModal({
               onClick={() => setShowRef(v => !v)}
               className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition rounded"
             >
-              Field Reference — available placeholders
+              Field Reference — {TEMPLATE_FIELD_REFERENCE.length} available placeholders
               <Icon name={showRef ? 'chevronUp' : 'chevronDown'} className="w-3.5 h-3.5" />
             </button>
             {showRef && (
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 p-4 border-t border-slate-100">
-                {TEMPLATE_FIELD_REFERENCE.map(f => (
-                  <div key={f.key} className="flex items-start gap-2 text-xs">
-                    <code className="shrink-0 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-mono text-[11px]">{f.key}</code>
-                    <span className="text-slate-600">{f.label} <span className="text-slate-400">— e.g. {f.example}</span></span>
-                  </div>
-                ))}
+              <div className="border-t border-slate-100">
+                {/* Search bar */}
+                <div className="px-4 pt-3 pb-2">
+                  <input
+                    type="text"
+                    value={refSearch}
+                    onChange={e => setRefSearch(e.target.value)}
+                    placeholder="Search placeholders by name, label or description…"
+                    className="w-full text-xs border border-slate-200 rounded px-3 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-brand-400 bg-slate-50 placeholder-slate-400"
+                  />
+                </div>
+                {/* Results */}
+                <div className="px-4 pb-4 max-h-72 overflow-y-auto scroll-thin">
+                  {q ? (
+                    // Flat filtered list
+                    filtered.length === 0
+                      ? <p className="text-xs text-slate-400 py-2">No placeholders match "{refSearch}".</p>
+                      : filtered.map(f => <FieldRow key={f.key} f={f} />)
+                  ) : (
+                    // Grouped display
+                    groups!.map(([grp, items]) => (
+                      <div key={grp} className="mb-3">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-1.5 border-b border-slate-100 mb-1">{grp}</div>
+                        {items.map(f => <FieldRow key={f.key} f={f} />)}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>

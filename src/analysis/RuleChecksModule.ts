@@ -119,15 +119,33 @@ export async function runRuleChecks(opts: RuleCheckOptions): Promise<RuleCheckRe
   }
 
   // 4. Missing codes — all mapped code description fields blank (mirrors Code Quality donut)
+  //    Uses the same CTE approach as _computeChartCache to guarantee agreement with that chart.
   if (has('object_part_code_description')) {
-    const pBlank = `(TRIM(COALESCE(CAST(object_part_code_description AS VARCHAR), '')) = '')`;
-    const dBlank = has('damage_code_description')
-      ? `AND (TRIM(COALESCE(CAST(damage_code_description AS VARCHAR), '')) = '')`
-      : '';
-    const cBlank = has('cause_code_description')
-      ? `AND (TRIM(COALESCE(CAST(cause_code_description AS VARCHAR), '')) = '')`
-      : '';
-    await runCheck('missing_codes', woCol, `${pBlank} ${dBlank} ${cBlank}`);
+    const dExpr = has('damage_code_description')
+      ? `UPPER(TRIM(COALESCE(damage_code_description,'')))`
+      : `''`;
+    const cExpr = has('cause_code_description')
+      ? `UPPER(TRIM(COALESCE(cause_code_description,'')))`
+      : `''`;
+    try {
+      const rows = await query(`
+        WITH per AS (
+          SELECT
+            ${woCol} AS wo,
+            UPPER(TRIM(COALESCE(object_part_code_description,''))) AS p,
+            ${dExpr} AS d,
+            ${cExpr} AS c
+          FROM v_analysis_scope
+        )
+        SELECT wo FROM per WHERE p = '' AND d = '' AND c = ''
+      `);
+      const woList = rows.map((r) => String(r.wo ?? '')).filter(Boolean);
+      perCheck['missing_codes'] = { matched: woList.length, sampleWOs: woList.slice(0, 5) };
+      for (const wo of woList) recordFlag(wo, 'missing_codes');
+    } catch (err) {
+      console.warn('Rule check missing_codes failed', err);
+      perCheck['missing_codes'] = { matched: 0, sampleWOs: [] };
+    }
   } else {
     perCheck['missing_codes'] = { matched: 0, sampleWOs: [] };
   }
