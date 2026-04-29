@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Icon from './Icon';
 import FilterPanel from './FilterPanel';
 import { useActiveRun, useActiveProject, useStore, useRunsForProject } from '../store/useStore';
@@ -11,7 +11,7 @@ import {
   createAnalysisScopeView,
 } from '../services/DuckDBService';
 import { EMPTY_FILTERS } from '../types';
-import type { AnalysisFilters, FilterOptions, ColumnMap, AIFlag, RuleCheckResult } from '../types';
+import type { AnalysisFilters, FilterOptions, ColumnMap, AIFlag, RuleCheckResult, RuleCheckId, EmailTemplate } from '../types';
 
 const RULE_LABELS: Record<string, string> = {
   missing_confirmation: 'Missing Confirmation',
@@ -161,6 +161,159 @@ async function loadWorkCenters(
   return [wcData, woDetailMap];
 }
 
+// ─── Calculation engine ───────────────────────────────────────────────────────
+//
+// Safe arithmetic evaluator (no eval / Function constructor). Supports
+// + - * / and parens with standard precedence. Operands are real numbers.
+// Used by the `calculate(EXPR)` template syntax.
+
+function evalArithmetic(expr: string): number {
+  // Strip percentage signs / commas left over after placeholder substitution
+  const src = expr.replace(/%|,/g, '');
+  let i = 0;
+
+  const peek = () => src[i];
+  const consume = () => src[i++];
+  const skipWs = () => { while (i < src.length && /\s/.test(src[i])) i++; };
+
+  // expression := term (('+'|'-') term)*
+  const parseExpr = (): number => {
+    skipWs();
+    let v = parseTerm();
+    skipWs();
+    while (peek() === '+' || peek() === '-') {
+      const op = consume();
+      const rhs = parseTerm();
+      v = op === '+' ? v + rhs : v - rhs;
+      skipWs();
+    }
+    return v;
+  };
+  // term := factor (('*'|'/') factor)*
+  const parseTerm = (): number => {
+    skipWs();
+    let v = parseFactor();
+    skipWs();
+    while (peek() === '*' || peek() === '/') {
+      const op = consume();
+      const rhs = parseFactor();
+      if (op === '*') v *= rhs;
+      else v = rhs === 0 ? NaN : v / rhs;
+      skipWs();
+    }
+    return v;
+  };
+  // factor := number | '(' expr ')' | '-' factor | '+' factor
+  const parseFactor = (): number => {
+    skipWs();
+    const c = peek();
+    if (c === '(') {
+      consume();
+      const v = parseExpr();
+      skipWs();
+      if (peek() !== ')') throw new Error('expected )');
+      consume();
+      return v;
+    }
+    if (c === '-') { consume(); return -parseFactor(); }
+    if (c === '+') { consume(); return parseFactor(); }
+    return parseNumber();
+  };
+  const parseNumber = (): number => {
+    skipWs();
+    let s = '';
+    while (i < src.length && /[0-9.]/.test(src[i])) s += consume();
+    if (!s) throw new Error('expected number');
+    const n = Number(s);
+    if (!isFinite(n)) throw new Error('invalid number');
+    return n;
+  };
+
+  const result = parseExpr();
+  skipWs();
+  if (i < src.length) throw new Error(`unexpected '${src.slice(i)}'`);
+  return result;
+}
+
+/** Replace every `calculate(EXPR)` in `text` with the numeric result. */
+function applyCalculations(text: string): string {
+  // Match calculate(...) with up to one level of nested parens.
+  const RE = /calculate\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
+  return text.replace(RE, (_, inner: string) => {
+    try {
+      const v = evalArithmetic(inner);
+      if (!isFinite(v)) return 'NaN';
+      return Number.isInteger(v) ? String(v) : v.toFixed(2);
+    } catch {
+      return `[calc-error: ${inner}]`;
+    }
+  });
+}
+
+// ─── Rich text + table HTML rendering ────────────────────────────────────────
+//
+// Templates are written in plain text with embedded markers:
+//   [B]bold[/B] [I]italic[/I] [U]underline[/U] [S]strike[/S]
+//   [TABLE rows=R cols=C autofit=1 header=1] | a | b | ... [/TABLE]
+//
+// `renderTemplateHTML` produces an HTML string suitable for direct inclusion
+// inside the existing <pre>...</pre> envelope used by sendEmail / preview.
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function parseTableAttrs(raw: string): { autofit: boolean; header: boolean } {
+  const get = (k: string) => {
+    const m = new RegExp(`${k}\\s*=\\s*([^\\s\\]]+)`).exec(raw);
+    return m ? m[1] : null;
+  };
+  const truthy = (v: string | null) => v !== null && v !== '0' && v.toLowerCase() !== 'false' && v !== '';
+  return { autofit: truthy(get('autofit')), header: truthy(get('header')) };
+}
+
+const PRE_OPEN  = `<pre style="font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.7;color:#1e293b;white-space:pre-wrap;background:none;border:none;padding:0;margin:0">`;
+const PRE_CLOSE = `</pre>`;
+
+export function renderTemplateHTML(text: string): string {
+  // 1. Escape user content first so injected markers can't break out
+  let s = escapeHtml(text);
+
+  // 2. Convert table blocks → <table> outside the surrounding <pre>
+  //    (tables can't live inside <pre> meaningfully; close pre, render
+  //    table, reopen pre.) The escaping above turned `[` into `&#x5b;`?
+  //    No — `[` and `]` are not in the escape set, so they survive intact.
+  s = s.replace(/\[TABLE([^\]]*)\]([\s\S]*?)\[\/TABLE\]/g, (_, attrsRaw: string, body: string) => {
+    const attrs = parseTableAttrs(attrsRaw);
+    const lines = body.trim().split('\n').map((l) => l.trim()).filter(Boolean);
+    const rows = lines.map((l) => l.replace(/^\||\|$/g, '').split('|').map((c) => c.trim()));
+    const tableStyle = attrs.autofit
+      ? 'table-layout:auto;width:auto;border-collapse:collapse;margin:8px 0'
+      : 'table-layout:fixed;width:100%;border-collapse:collapse;margin:8px 0';
+    const cellBase   = 'border:1px solid #cbd5e1;padding:6px 10px;font-family:Inter,sans-serif;font-size:13px;vertical-align:top';
+    const headerExtra = ';background:#f1f5f9;font-weight:bold;color:#0f172a';
+    const html = rows.map((cells, rowIdx) => {
+      const tag = (attrs.header && rowIdx === 0) ? 'th' : 'td';
+      const style = cellBase + (tag === 'th' ? headerExtra : '');
+      const tr = cells.map((c) => `<${tag} style="${style}">${c}</${tag}>`).join('');
+      return `<tr>${tr}</tr>`;
+    }).join('');
+    return `${PRE_CLOSE}<table style="${tableStyle}">${html}</table>${PRE_OPEN}`;
+  });
+
+  // 3. Convert inline markers
+  s = s
+    .replace(/\[B\]([\s\S]*?)\[\/B\]/g, '<b>$1</b>')
+    .replace(/\[I\]([\s\S]*?)\[\/I\]/g, '<i>$1</i>')
+    .replace(/\[U\]([\s\S]*?)\[\/U\]/g, '<u style="text-decoration:underline">$1</u>')
+    .replace(/\[S\]([\s\S]*?)\[\/S\]/g, '<s style="text-decoration:line-through">$1</s>');
+
+  return s;
+}
+
 // ─── Email template system ────────────────────────────────────────────────────
 
 export const DEFAULT_EMAIL_TEMPLATE = [
@@ -257,10 +410,45 @@ const TEMPLATE_FIELD_REFERENCE: FieldRef[] = [
   { group: 'Overall Quality', key: '{OQCleanPct}',         label: 'Clean %',             description: 'Clean WOs as percentage of total',                                  example: '91.8%' },
   { group: 'Overall Quality', key: '{OQEntryQualityPct}',  label: 'Entry Quality %',     description: 'Entry quality WOs as percentage of total',                          example: '3.3%' },
   { group: 'Overall Quality', key: '{OQMissingFieldsPct}', label: 'Missing Fields %',    description: 'Missing fields WOs as percentage of total',                         example: '4.9%' },
+  // ── Top Equipment ────────────────────────────────────────────────────────────
+  { group: 'Top Equipment', key: '{TopEq1}',      label: 'Top equipment #1 name',  description: 'Most-flagged equipment in this work center',           example: 'PUMP-101' },
+  { group: 'Top Equipment', key: '{TopEq1Count}', label: 'Top equipment #1 count', description: 'Distinct flagged WO count for the #1 equipment',       example: '12' },
+  { group: 'Top Equipment', key: '{TopEq2}',      label: 'Top equipment #2 name',  description: '2nd most-flagged equipment',                           example: 'MOTOR-22' },
+  { group: 'Top Equipment', key: '{TopEq2Count}', label: 'Top equipment #2 count', description: 'Distinct flagged WO count for the #2 equipment',       example: '9' },
+  { group: 'Top Equipment', key: '{TopEq3}',      label: 'Top equipment #3 name',  description: '3rd most-flagged equipment',                           example: 'VALVE-7' },
+  { group: 'Top Equipment', key: '{TopEq3Count}', label: 'Top equipment #3 count', description: 'Distinct flagged WO count for the #3 equipment',       example: '6' },
+  { group: 'Top Equipment', key: '{TopEq4}',      label: 'Top equipment #4 name',  description: '4th most-flagged equipment',                           example: 'GEAR-A' },
+  { group: 'Top Equipment', key: '{TopEq4Count}', label: 'Top equipment #4 count', description: 'Distinct flagged WO count for the #4 equipment',       example: '4' },
+  { group: 'Top Equipment', key: '{TopEq5}',      label: 'Top equipment #5 name',  description: '5th most-flagged equipment',                           example: 'BRG-12' },
+  { group: 'Top Equipment', key: '{TopEq5Count}', label: 'Top equipment #5 count', description: 'Distinct flagged WO count for the #5 equipment',       example: '3' },
+  // ── Severity ─────────────────────────────────────────────────────────────────
+  { group: 'Severity', key: '{HighSeverityAICount}',   label: 'High-severity AI flags',   description: 'Count of AI flag instances marked HIGH',          example: '6' },
+  { group: 'Severity', key: '{MediumSeverityAICount}', label: 'Medium-severity AI flags', description: 'Count of AI flag instances marked MEDIUM',        example: '4' },
+  { group: 'Severity', key: '{LowSeverityAICount}',    label: 'Low-severity AI flags',    description: 'Count of AI flag instances marked LOW',           example: '2' },
+  // ── Comparison ───────────────────────────────────────────────────────────────
+  { group: 'Comparison', key: '{PrevPeriodLabel}',      label: 'Previous run period',      description: 'Period label of the prior analysed run in this project', example: '2026-Q1' },
+  { group: 'Comparison', key: '{PrevTotalWOs}',         label: 'Previous total WOs',       description: 'Total WOs analysed in the prior run',                  example: '232' },
+  { group: 'Comparison', key: '{PrevRuleFlaggedWOs}',   label: 'Previous rule-flagged WOs',description: 'Rule-flagged WO count in the prior run',                example: '15' },
+  { group: 'Comparison', key: '{PrevAIFlaggedWOs}',     label: 'Previous AI-flagged WOs',  description: 'AI-flagged WO count in the prior run',                  example: '11' },
+  { group: 'Comparison', key: '{DeltaTotalWOs}',        label: 'Δ Total WOs',              description: 'Current minus previous total WOs (signed)',             example: '+13' },
+  { group: 'Comparison', key: '{DeltaRuleFlaggedWOs}',  label: 'Δ Rule-flagged WOs',       description: 'Current minus previous rule-flagged WOs',               example: '-3' },
+  { group: 'Comparison', key: '{DeltaAIFlaggedWOs}',    label: 'Δ AI-flagged WOs',         description: 'Current minus previous AI-flagged WOs',                 example: '-2' },
+  { group: 'Comparison', key: '{TopIssueLabel}',        label: 'Top issue category',       description: 'The single error-distribution category with the highest count', example: 'Missing Confirmation' },
+  { group: 'Comparison', key: '{TopIssueCount}',        label: 'Top issue count',          description: 'Count for the dominant error category',                 example: '8' },
+  // ── Catalog ──────────────────────────────────────────────────────────────────
+  { group: 'Catalog', key: '{CatalogMatchPct}', label: 'Catalog match %', description: 'Fraction of WOs whose failure_catalog_desc exists in the catalog (as %)', example: '92.4%' },
+  { group: 'Catalog', key: '{Now}',             label: 'Current ISO date', description: 'Full ISO timestamp of when the email was generated',                       example: '2026-04-29T14:30:00Z' },
+  // ── Calculation ──────────────────────────────────────────────────────────────
+  { group: 'Calculation', key: 'calculate(EXPR)', label: 'Inline arithmetic',          description: 'Evaluate an arithmetic expression using placeholders. Supports + - * / and parens.', example: 'calculate(({TotalWOs}-{CleanWOs})/{TotalWOs}*100) → 4.97' },
   // ── Formatting ───────────────────────────────────────────────────────────────
   { group: 'Formatting', key: '{ErrorDistSection}', label: 'Error Distribution Block', description: 'Auto-generated full breakdown of all flagged categories (rule + AI)', example: '(auto-generated table)' },
   { group: 'Formatting', key: '{Sep}',              label: 'Separator line',           description: '═ repeated 58 times — use as a major section divider',               example: '══════…' },
   { group: 'Formatting', key: '{Dash}',             label: 'Section divider',          description: '- repeated 42 times — use as a sub-section divider',                 example: '──────…' },
+  { group: 'Formatting', key: '[B]…[/B]',           label: 'Bold',                     description: 'Wrap text with these markers to render bold in the email',           example: '[B]Action[/B]' },
+  { group: 'Formatting', key: '[I]…[/I]',           label: 'Italic',                   description: 'Wrap text with these markers to render italic in the email',         example: '[I]note[/I]' },
+  { group: 'Formatting', key: '[U]…[/U]',           label: 'Underline',                description: 'Wrap text with these markers to render underline in the email',      example: '[U]key[/U]' },
+  { group: 'Formatting', key: '[S]…[/S]',           label: 'Strikethrough',            description: 'Wrap text with these markers to render strikethrough in the email',  example: '[S]old[/S]' },
+  { group: 'Formatting', key: '[TABLE …][/TABLE]',  label: 'Table block',              description: 'Pipe-delimited rows. Attributes: rows, cols, autofit, header. Use the toolbar Insert Table button.', example: '[TABLE rows=2 cols=2]…[/TABLE]' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -269,7 +457,26 @@ export default function AuditReportScreen() {
   const run = useActiveRun();
   const project = useActiveProject();
   const projectRuns = useRunsForProject(run?.projectId ?? null);
-  const { reportingEmails, aiConfig, setScreen, emailTemplate, setEmailTemplate } = useStore();
+  const {
+    reportingEmails,
+    aiConfig,
+    setScreen,
+    emailTemplate,                  // legacy fallback
+    emailTemplates,
+    activeEmailTemplateId,
+    addEmailTemplate,
+    updateEmailTemplate,
+    deleteEmailTemplate,
+    setActiveEmailTemplate,
+  } = useStore();
+
+  // Active template body — falls back to legacy emailTemplate, then DEFAULT
+  const activeTemplate: EmailTemplate | null = useMemo(() => {
+    if (!activeEmailTemplateId) return null;
+    return emailTemplates.find((t) => t.id === activeEmailTemplateId) ?? null;
+  }, [emailTemplates, activeEmailTemplateId]);
+
+  const activeBody: string = activeTemplate?.body ?? emailTemplate ?? DEFAULT_EMAIL_TEMPLATE;
 
   useRunAutoRestore(run);
 
@@ -411,7 +618,9 @@ export default function AuditReportScreen() {
 
     // Code Quality (per WC, same derivation as buildDashboardPayload)
     const cqNotListed = wc.ruleDistribution['not_listed_codes'] ?? 0;
-    const cqMissing   = wc.ruleDistribution['missing_codes']    ?? 0;
+    // Patch missing_codes count with chartCache as the authoritative source if present
+    const cacheMissingForWC = (run?.chartCache?.missingCodeWOs ?? []).filter((wo) => woSet2.has(wo)).length;
+    const cqMissing   = Math.max(wc.ruleDistribution['missing_codes'] ?? 0, cacheMissingForWC);
     const cqInvalidH  = new Set(wcAIFlags2.filter(f => f.category === 'desc_code_conflict').map(f => f.woNumber)).size;
     const cqValid     = Math.max(0, wc.totalWOs - cqNotListed - cqMissing - cqInvalidH);
 
@@ -419,7 +628,55 @@ export default function AuditReportScreen() {
     const oqEntry   = aiFlaggedSet2.size;
     const oqMissing = [...ruleFlaggedSet2].filter(wo => !aiFlaggedSet2.has(wo)).length;
 
-    const template = emailTemplate ?? DEFAULT_EMAIL_TEMPLATE;
+    // Top Equipment (per WC) — count distinct flagged WOs per equipment via AI flag metadata
+    //   Mirrors the buildDashboardPayload computation but stops at top 5.
+    const equipMap = new Map<string, Set<string>>();
+    for (const f of wcAIFlags2) {
+      if (!f.equipment) continue;
+      let s = equipMap.get(f.equipment);
+      if (!s) { s = new Set(); equipMap.set(f.equipment, s); }
+      s.add(f.woNumber);
+    }
+    const topEqList = [...equipMap.entries()]
+      .map(([equipment, wos]) => ({ equipment, count: wos.size }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    // Severity counts — count of AI flag instances by severity (not WOs)
+    let highSev = 0, medSev = 0, lowSev = 0;
+    for (const f of wcAIFlags2) {
+      if (f.severity === 'HIGH') highSev++;
+      else if (f.severity === 'MEDIUM') medSev++;
+      else if (f.severity === 'LOW') lowSev++;
+    }
+
+    // Comparison — derive deltas from prior analysed run in this project
+    const analysed = projectRuns
+      .filter((r) => r.stage === 'analysed' && r.ruleChecks)
+      .sort((a, b) => a.runIndex - b.runIndex);
+    const currIdx = analysed.findIndex((r) => r.id === run?.id);
+    const prev = currIdx > 0 ? analysed[currIdx - 1] : null;
+    const prevTotalWOs       = prev?.ruleChecks?.totalWOs ?? 0;
+    const prevRuleFlaggedWOs = prev ? new Set((prev.ruleChecks?.flaggedWOs ?? []).map(fw => fw.wo)).size : 0;
+    const prevAIFlaggedWOs   = prev ? new Set((prev.aiFlags ?? []).map(f => f.woNumber)).size : 0;
+    const prevPeriodLabel    = prev?.periodLabel ?? '';
+    const sign = (n: number) => (n >= 0 ? '+' : '') + String(n);
+
+    // Top issue across the error distribution (rule + AI)
+    type DistEntry = { label: string; value: number };
+    const dist: DistEntry[] = [];
+    for (const [k, v] of Object.entries(wc.ruleDistribution)) dist.push({ label: RULE_LABELS[k] ?? k, value: v });
+    for (const [k, v] of Object.entries(wc.aiDistribution))   dist.push({ label: AI_LABELS[k]   ?? k, value: v });
+    const topIssue = dist.sort((a, b) => b.value - a.value)[0];
+    const topIssueLabel = topIssue?.value ? topIssue.label : 'None';
+    const topIssueCount = topIssue?.value ?? 0;
+
+    // Catalog match
+    const catMatchPct = run?.dataProfile?.failureCatalogMatchRate != null
+      ? (run.dataProfile.failureCatalogMatchRate * 100).toFixed(1) + '%'
+      : 'N/A';
+
+    const template = activeBody;
     return template
       .replace(/{Sep}/g,                         sep)
       .replace(/{Dash}/g,                        dash)
@@ -443,7 +700,9 @@ export default function AuditReportScreen() {
       .replace(/{RuleMissingConfirmation}/g,     String(wc.ruleDistribution['missing_confirmation'] ?? 0))
       .replace(/{RuleNotListedCodes}/g,          String(wc.ruleDistribution['not_listed_codes']     ?? 0))
       .replace(/{RuleMissingScopingText}/g,      String(wc.ruleDistribution['missing_scoping_text'] ?? 0))
-      .replace(/{RuleMissingCodes}/g,            String(wc.ruleDistribution['missing_codes']        ?? 0))
+      // {RuleMissingCodes} falls back to chartCache so the email body matches the
+      // Code Quality donut even if the persisted ruleChecks ever underreports.
+      .replace(/{RuleMissingCodes}/g,            String(cqMissing))
       // AI Categories
       .replace(/{AIDescCodeConflict}/g,             String(wc.aiDistribution['desc_code_conflict']              ?? 0))
       .replace(/{AIFalseNotListed}/g,               String(wc.aiDistribution['false_not_listed']                ?? 0))
@@ -467,15 +726,77 @@ export default function AuditReportScreen() {
       .replace(/{OQCleanPct}/g,          pct(cleanWOs))
       .replace(/{OQEntryQualityPct}/g,   pct(oqEntry))
       .replace(/{OQMissingFieldsPct}/g,  pct(oqMissing))
+      // Top Equipment 1..5 (empty string when absent)
+      .replace(/{TopEq1}/g,        topEqList[0]?.equipment ?? '')
+      .replace(/{TopEq1Count}/g,   String(topEqList[0]?.count ?? 0))
+      .replace(/{TopEq2}/g,        topEqList[1]?.equipment ?? '')
+      .replace(/{TopEq2Count}/g,   String(topEqList[1]?.count ?? 0))
+      .replace(/{TopEq3}/g,        topEqList[2]?.equipment ?? '')
+      .replace(/{TopEq3Count}/g,   String(topEqList[2]?.count ?? 0))
+      .replace(/{TopEq4}/g,        topEqList[3]?.equipment ?? '')
+      .replace(/{TopEq4Count}/g,   String(topEqList[3]?.count ?? 0))
+      .replace(/{TopEq5}/g,        topEqList[4]?.equipment ?? '')
+      .replace(/{TopEq5Count}/g,   String(topEqList[4]?.count ?? 0))
+      // Severity
+      .replace(/{HighSeverityAICount}/g,   String(highSev))
+      .replace(/{MediumSeverityAICount}/g, String(medSev))
+      .replace(/{LowSeverityAICount}/g,    String(lowSev))
+      // Comparison
+      .replace(/{PrevPeriodLabel}/g,      prevPeriodLabel || 'N/A')
+      .replace(/{PrevTotalWOs}/g,         String(prevTotalWOs))
+      .replace(/{PrevRuleFlaggedWOs}/g,   String(prevRuleFlaggedWOs))
+      .replace(/{PrevAIFlaggedWOs}/g,     String(prevAIFlaggedWOs))
+      .replace(/{DeltaTotalWOs}/g,        sign(wc.totalWOs - prevTotalWOs))
+      .replace(/{DeltaRuleFlaggedWOs}/g,  sign(wc.ruleFlagsCount - prevRuleFlaggedWOs))
+      .replace(/{DeltaAIFlaggedWOs}/g,    sign(wc.aiFlagsCount - prevAIFlaggedWOs))
+      .replace(/{TopIssueLabel}/g,        topIssueLabel)
+      .replace(/{TopIssueCount}/g,        String(topIssueCount))
+      // Catalog
+      .replace(/{CatalogMatchPct}/g,      catMatchPct)
+      .replace(/{Now}/g,                  new Date().toISOString())
       // Auto-generated section (last — may contain other braces)
-      .replace(/{ErrorDistSection}/g,    errorDistSection);
+      .replace(/{ErrorDistSection}/g,     errorDistSection)
+      // Final pass: evaluate calculate(...) expressions
+      .replace(/calculate\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g, (_, inner: string) => {
+        try {
+          const v = evalArithmetic(inner);
+          if (!isFinite(v)) return 'NaN';
+          return Number.isInteger(v) ? String(v) : v.toFixed(2);
+        } catch {
+          return `[calc-error: ${inner}]`;
+        }
+      });
   };
 
   const buildDashboardPayload = (wc: WorkCenterAuditData) => {
     const woSet = new Set(wc.woNumbers);
 
     const wcAIFlags  = (run?.aiFlags ?? []).filter(f => woSet.has(f.woNumber));
-    const wcRuleWOs  = (run?.ruleChecks?.flaggedWOs ?? []).filter(fw => woSet.has(fw.wo));
+    const wcRuleWOs: Array<{ wo: string; checks: RuleCheckId[] }> =
+      (run?.ruleChecks?.flaggedWOs ?? [])
+        .filter(fw => woSet.has(fw.wo))
+        // Clone so we can safely augment with missing_codes from chartCache without mutating store state
+        .map(fw => ({ wo: fw.wo, checks: [...fw.checks] }));
+
+    // Guarantee patch: if chartCache has missingCodeWOs that aren't represented
+    // in wcRuleWOs, inject 'missing_codes' for them. This keeps dashboard.html
+    // Code Quality donut + Issues Rule Flags tab in agreement with the live donut.
+    const cacheMissing = (run?.chartCache?.missingCodeWOs ?? []).filter(wo => woSet.has(wo));
+    if (cacheMissing.length > 0) {
+      const seen = new Map(wcRuleWOs.map(fw => [fw.wo, fw] as const));
+      for (const wo of cacheMissing) {
+        const existing = seen.get(wo);
+        if (existing) {
+          if (!existing.checks.includes('missing_codes')) {
+            existing.checks.push('missing_codes');
+          }
+        } else {
+          const fresh = { wo, checks: ['missing_codes' as const] };
+          wcRuleWOs.push(fresh);
+          seen.set(wo, fresh);
+        }
+      }
+    }
 
     const aiFlaggedSet   = new Set(wcAIFlags.map(f => f.woNumber));
     const ruleFlaggedSet = new Set(wcRuleWOs.map(fw => fw.wo));
@@ -634,7 +955,7 @@ export default function AuditReportScreen() {
         body: JSON.stringify({
           emailTo,
           subject: `Reliability Audit Report — ${wc.description || wc.workCenter}`,
-          emailBody: `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc"><tr><td align="center" valign="top" style="padding:32px 16px"><table cellpadding="0" cellspacing="0" border="0" align="center" style="max-width:680px;width:100%"><tr><td align="left" valign="top"><pre style="font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.7;color:#1e293b;white-space:pre-wrap;background:none;border:none;padding:0;margin:0">${getEmailText(wc)}</pre></td></tr></table></td></tr></table>`,
+          emailBody: `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc"><tr><td align="center" valign="top" style="padding:32px 16px"><table cellpadding="0" cellspacing="0" border="0" align="center" style="max-width:680px;width:100%"><tr><td align="left" valign="top"><pre style="font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.7;color:#1e293b;white-space:pre-wrap;background:none;border:none;padding:0;margin:0">${renderTemplateHTML(getEmailText(wc))}</pre></td></tr></table></td></tr></table>`,
           dashboardJson: JSON.stringify(buildDashboardPayload(wc)),
         }),
       });
@@ -670,8 +991,10 @@ export default function AuditReportScreen() {
               className="px-4 py-2 text-sm border border-slate-300 rounded font-bold hover:bg-slate-50 transition flex items-center gap-2"
             >
               <Icon name="wand" className="w-4 h-4" /> Customize Template
-              {emailTemplate && (
-                <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-indigo-100 text-indigo-700 rounded">Custom</span>
+              {activeTemplate && (
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-indigo-100 text-indigo-700 rounded truncate max-w-[120px]" title={activeTemplate.name}>
+                  {activeTemplate.name}
+                </span>
               )}
             </button>
             <button
@@ -838,9 +1161,11 @@ export default function AuditReportScreen() {
                   </span>
                 </div>
               </div>
-              <pre className="p-6 text-xs font-mono text-slate-700 whitespace-pre-wrap leading-relaxed">
-                {getEmailText(previewWC)}
-              </pre>
+              <div
+                className="p-6 text-xs font-mono text-slate-700 leading-relaxed"
+                style={{ whiteSpace: 'pre-wrap' }}
+                dangerouslySetInnerHTML={{ __html: renderTemplateHTML(getEmailText(previewWC)) }}
+              />
             </div>
           ) : (
             <div className="m-auto text-center text-slate-400 max-w-xs">
@@ -854,8 +1179,12 @@ export default function AuditReportScreen() {
 
     {showTemplateModal && (
       <TemplateEditorModal
-        initial={emailTemplate ?? DEFAULT_EMAIL_TEMPLATE}
-        onSave={(t) => setEmailTemplate(t)}
+        templates={emailTemplates}
+        activeId={activeEmailTemplateId}
+        onAdd={addEmailTemplate}
+        onUpdate={updateEmailTemplate}
+        onDelete={deleteEmailTemplate}
+        onSetActive={setActiveEmailTemplate}
         onClose={() => setShowTemplateModal(false)}
       />
     )}
@@ -865,19 +1194,48 @@ export default function AuditReportScreen() {
 
 // ─── Template editor modal ────────────────────────────────────────────────────
 
-function TemplateEditorModal({
-  initial,
-  onSave,
-  onClose,
-}: {
-  initial: string;
-  onSave: (t: string) => void;
-  onClose: () => void;
-}) {
-  const [draft, setDraft] = useState(initial);
-  const [showRef, setShowRef] = useState(false);
+const DEFAULT_TEMPLATE_ID = '__default__';
+
+interface TemplateEditorModalProps {
+  templates: EmailTemplate[];
+  activeId: string | null;
+  onAdd:       (name: string, body: string) => string;
+  onUpdate:    (id: string, updates: Partial<Pick<EmailTemplate, 'name' | 'body'>>) => void;
+  onDelete:    (id: string) => void;
+  onSetActive: (id: string | null) => void;
+  onClose:     () => void;
+}
+
+function TemplateEditorModal(props: TemplateEditorModalProps) {
+  const { templates, activeId, onAdd, onUpdate, onDelete, onSetActive, onClose } = props;
+
+  // Selected template in the dropdown — DEFAULT_TEMPLATE_ID for the read-only built-in,
+  // otherwise an EmailTemplate.id from the library.
+  const [selectedId, setSelectedId] = useState<string>(activeId ?? DEFAULT_TEMPLATE_ID);
+  const selected = useMemo(() => templates.find(t => t.id === selectedId) ?? null, [templates, selectedId]);
+  const isDefault = selectedId === DEFAULT_TEMPLATE_ID;
+
+  // Local editable copies — name + body. Reset whenever the selection changes.
+  const [draftName, setDraftName] = useState(selected?.name ?? 'Default');
+  const [draft, setDraft]         = useState(selected?.body ?? DEFAULT_EMAIL_TEMPLATE);
+  useEffect(() => {
+    setDraftName(selected?.name ?? 'Default');
+    setDraft(selected?.body ?? DEFAULT_EMAIL_TEMPLATE);
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mini-modal states
+  const [showRef, setShowRef]     = useState(false);
   const [refSearch, setRefSearch] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [showTable, setShowTable] = useState(false);
+  const [tableRows, setTableRows] = useState(3);
+  const [tableCols, setTableCols] = useState(4);
+  const [tableAutofit, setTableAutofit] = useState(true);
+  const [tableHeader, setTableHeader]   = useState(true);
+  const [showCalc, setShowCalc]   = useState(false);
+  const [calcExpr, setCalcExpr]   = useState('({TotalWOs}-{CleanWOs})/{TotalWOs}*100');
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleCopy = (key: string) => {
     navigator.clipboard.writeText(key).catch(() => {});
@@ -885,7 +1243,79 @@ function TemplateEditorModal({
     setTimeout(() => setCopiedKey(null), 1500);
   };
 
-  // Derive display list: filtered flat or grouped
+  // Insert text at the cursor position; replace selection if any
+  const insertAtCursor = (text: string, opts?: { selectInsertion?: boolean }) => {
+    const ta = textareaRef.current;
+    if (!ta) {
+      setDraft((d) => d + text);
+      return;
+    }
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    const before = draft.slice(0, start);
+    const after  = draft.slice(end);
+    const next = before + text + after;
+    setDraft(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const newStart = opts?.selectInsertion ? start : start + text.length;
+      const newEnd   = start + text.length;
+      ta.setSelectionRange(newStart, newEnd);
+    });
+  };
+
+  // Wrap the current selection with a marker pair; if no selection, insert empty marker
+  const wrapSelection = (open: string, close: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    const sel   = draft.slice(start, end);
+    const before = draft.slice(0, start);
+    const after  = draft.slice(end);
+    const wrapped = open + (sel || '') + close;
+    setDraft(before + wrapped + after);
+    requestAnimationFrame(() => {
+      ta.focus();
+      // Place cursor inside the wrapper if no selection, or select the wrapped content
+      const innerStart = start + open.length;
+      const innerEnd   = innerStart + sel.length;
+      ta.setSelectionRange(innerStart, innerEnd);
+    });
+  };
+
+  // Insert a table block at the cursor based on the mini-modal inputs
+  const handleInsertTable = () => {
+    const rows = Math.max(1, Math.min(20, Math.floor(tableRows || 1)));
+    const cols = Math.max(1, Math.min(10, Math.floor(tableCols || 1)));
+    const attrs = [`rows=${rows}`, `cols=${cols}`];
+    if (tableAutofit) attrs.push('autofit=1');
+    if (tableHeader)  attrs.push('header=1');
+    const headerRow = tableHeader
+      ? '| ' + Array.from({ length: cols }, (_, i) => `Header ${i + 1}`).join(' | ') + ' |'
+      : null;
+    const bodyRowCount = headerRow ? rows - 1 : rows;
+    const bodyRows = Array.from({ length: Math.max(0, bodyRowCount) }, () =>
+      '| ' + Array.from({ length: cols }, () => 'Cell').join(' | ') + ' |'
+    );
+    const lines = [
+      `[TABLE ${attrs.join(' ')}]`,
+      ...(headerRow ? [headerRow] : []),
+      ...bodyRows,
+      `[/TABLE]`,
+    ];
+    insertAtCursor('\n' + lines.join('\n') + '\n');
+    setShowTable(false);
+  };
+
+  const handleInsertCalc = () => {
+    const trimmed = (calcExpr || '').trim();
+    if (!trimmed) return;
+    insertAtCursor(`calculate(${trimmed})`);
+    setShowCalc(false);
+  };
+
+  // Field reference — search/group/copy
   const q = refSearch.trim().toLowerCase();
   const filtered = q
     ? TEMPLATE_FIELD_REFERENCE.filter(f =>
@@ -894,8 +1324,6 @@ function TemplateEditorModal({
         f.description.toLowerCase().includes(q)
       )
     : TEMPLATE_FIELD_REFERENCE;
-
-  // Group map (only used when not searching)
   const groups = q ? null : Array.from(
     TEMPLATE_FIELD_REFERENCE.reduce((m, f) => {
       if (!m.has(f.group)) m.set(f.group, []);
@@ -920,16 +1348,45 @@ function TemplateEditorModal({
     </div>
   );
 
+  // ── Save / New / Delete handlers ─────────────────────────────────────────────
+  const handleSaveAsNew = () => {
+    const name = window.prompt('New template name:', draftName === 'Default' ? 'Custom Template' : draftName);
+    if (!name) return;
+    const newId = onAdd(name.trim(), draft);
+    setSelectedId(newId);
+  };
+
+  const handleSave = () => {
+    if (isDefault) {
+      // Default is read-only — fork into a new template instead
+      handleSaveAsNew();
+      return;
+    }
+    onUpdate(selectedId, { name: draftName.trim() || 'Untitled', body: draft });
+    onSetActive(selectedId);
+    onClose();
+  };
+
+  const handleDelete = () => {
+    if (isDefault) return;
+    const cur = selected;
+    if (!cur) return;
+    if (!window.confirm(`Delete template "${cur.name}"? This cannot be undone.`)) return;
+    onDelete(cur.id);
+    setSelectedId(DEFAULT_TEMPLATE_ID);
+  };
+
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col">
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+        {/* Header — title + close */}
+        <div className="flex items-center justify-between px-6 py-3 border-b shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Email Template Editor</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Edit the free text around <span className="font-mono bg-slate-100 px-1 rounded text-slate-700">{'{PLACEHOLDER}'}</span> markers — those are replaced with live data when the email is sent.
+              Use <span className="font-mono bg-slate-100 px-1 rounded text-slate-700">{'{PLACEHOLDER}'}</span>, <span className="font-mono bg-slate-100 px-1 rounded text-slate-700">[B]…[/B]</span>, <span className="font-mono bg-slate-100 px-1 rounded text-slate-700">[TABLE …][/TABLE]</span>, and <span className="font-mono bg-slate-100 px-1 rounded text-slate-700">calculate(…)</span> markers — they're replaced when the email is sent.
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition p-1 rounded">
@@ -937,15 +1394,173 @@ function TemplateEditorModal({
           </button>
         </div>
 
+        {/* Template selector + name */}
+        <div className="px-6 py-3 border-b shrink-0 bg-slate-50/50 flex items-center gap-3 flex-wrap">
+          <span className="text-xs uppercase tracking-wider text-slate-500 font-bold">Template</span>
+          <select
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            className="text-sm border border-slate-300 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 min-w-[180px]"
+          >
+            <option value={DEFAULT_TEMPLATE_ID}>Default (built-in)</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          {!isDefault && (
+            <input
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              placeholder="Template name"
+              className="text-sm border border-slate-300 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={handleSaveAsNew}
+              className="px-3 py-1.5 text-xs border border-slate-300 rounded font-bold hover:bg-white transition flex items-center gap-1.5"
+              title="Save current draft as a new template"
+            >
+              <Icon name="copy" className="w-3.5 h-3.5" /> Save As New
+            </button>
+            <button
+              onClick={() => { onSetActive(isDefault ? null : selectedId); onClose(); }}
+              className="px-3 py-1.5 text-xs border border-slate-300 rounded font-bold hover:bg-white transition"
+              title="Use this template for outgoing emails"
+            >
+              Set Active
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={isDefault}
+              className="px-3 py-1.5 text-xs border border-red-200 rounded font-bold text-red-600 hover:bg-red-50 transition disabled:opacity-30 disabled:cursor-not-allowed"
+              title={isDefault ? 'The Default template cannot be deleted' : 'Delete this template'}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+
+        {/* Formatting toolbar */}
+        <div className="px-6 py-2 border-b shrink-0 flex items-center gap-1 flex-wrap bg-white">
+          <button
+            onClick={() => wrapSelection('[B]', '[/B]')}
+            title="Bold"
+            className="w-8 h-8 flex items-center justify-center font-bold text-slate-700 hover:bg-slate-100 rounded transition"
+          >
+            B
+          </button>
+          <button
+            onClick={() => wrapSelection('[I]', '[/I]')}
+            title="Italic"
+            className="w-8 h-8 flex items-center justify-center italic text-slate-700 hover:bg-slate-100 rounded transition"
+          >
+            I
+          </button>
+          <button
+            onClick={() => wrapSelection('[U]', '[/U]')}
+            title="Underline"
+            className="w-8 h-8 flex items-center justify-center underline text-slate-700 hover:bg-slate-100 rounded transition"
+          >
+            U
+          </button>
+          <button
+            onClick={() => wrapSelection('[S]', '[/S]')}
+            title="Strikethrough"
+            className="w-8 h-8 flex items-center justify-center line-through text-slate-700 hover:bg-slate-100 rounded transition"
+          >
+            S
+          </button>
+          <div className="h-5 w-px bg-slate-200 mx-1" />
+          <button
+            onClick={() => setShowTable((v) => !v)}
+            className={`px-2.5 h-8 flex items-center gap-1.5 text-xs font-bold rounded transition ${showTable ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-100'}`}
+            title="Insert a pipe-delimited table block"
+          >
+            <Icon name="table" className="w-3.5 h-3.5" /> Insert Table
+          </button>
+          <button
+            onClick={() => setShowCalc((v) => !v)}
+            className={`px-2.5 h-8 flex items-center gap-1.5 text-xs font-bold rounded transition ${showCalc ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-100'}`}
+            title="Insert a calculated arithmetic expression"
+          >
+            ƒ Insert Calculation
+          </button>
+          <div className="ml-auto text-[10px] text-slate-400 font-mono">
+            Markers: [B] [I] [U] [S] [TABLE …][/TABLE] · calculate(…)
+          </div>
+        </div>
+
+        {/* Conditional mini-modals (table builder + calculation builder) */}
+        {showTable && (
+          <div className="px-6 py-3 border-b bg-amber-50/40 flex items-end gap-3 flex-wrap shrink-0">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Rows</label>
+              <input type="number" min={1} max={20} value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} className="w-16 text-sm border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Columns</label>
+              <input type="number" min={1} max={10} value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} className="w-16 text-sm border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+              <input type="checkbox" checked={tableAutofit} onChange={(e) => setTableAutofit(e.target.checked)} />
+              AutoFit Contents
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+              <input type="checkbox" checked={tableHeader} onChange={(e) => setTableHeader(e.target.checked)} />
+              Header row (bold)
+            </label>
+            <div className="ml-auto flex gap-2">
+              <button onClick={() => setShowTable(false)} className="px-3 py-1.5 text-xs border border-slate-300 rounded font-bold hover:bg-white">Cancel</button>
+              <button onClick={handleInsertTable} className="px-3 py-1.5 text-xs bg-brand-600 text-white rounded font-bold hover:bg-brand-700">Insert</button>
+            </div>
+          </div>
+        )}
+        {showCalc && (
+          <div className="px-6 py-3 border-b bg-violet-50/40 flex flex-col gap-2 shrink-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Expression</label>
+              <input
+                value={calcExpr}
+                onChange={(e) => setCalcExpr(e.target.value)}
+                placeholder="({TotalWOs}-{CleanWOs})/{TotalWOs}*100"
+                className="flex-1 text-sm font-mono border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+              <div className="flex gap-1">
+                {['(', ')', '+', '-', '*', '/'].map((op) => (
+                  <button key={op} onClick={() => setCalcExpr((s) => s + op)} className="w-7 h-7 text-sm font-mono text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-100">{op}</button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 shrink-0">Insert placeholder:</span>
+              {['{TotalWOs}', '{CleanWOs}', '{TotalRuleFlaggedWOs}', '{TotalAIFlaggedWOs}', '{TotalFlags}', '{PrevTotalWOs}', '{DeltaTotalWOs}'].map((p) => (
+                <button key={p} onClick={() => setCalcExpr((s) => s + p)} className="text-[11px] font-mono bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 hover:bg-indigo-50 hover:border-indigo-200">{p}</button>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowCalc(false)} className="px-3 py-1.5 text-xs border border-slate-300 rounded font-bold hover:bg-white">Cancel</button>
+              <button onClick={handleInsertCalc} className="px-3 py-1.5 text-xs bg-brand-600 text-white rounded font-bold hover:bg-brand-700">Insert calculate(…)</button>
+            </div>
+          </div>
+        )}
+
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 min-h-0">
           <textarea
+            ref={textareaRef}
             value={draft}
             onChange={e => setDraft(e.target.value)}
             className="w-full font-mono text-xs text-slate-800 border border-slate-300 rounded p-3 resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 leading-relaxed"
-            rows={28}
+            rows={isDefault ? 24 : 22}
             spellCheck={false}
+            readOnly={isDefault}
           />
+          {isDefault && (
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1.5">
+              The Default template is read-only. Click <b>Save As New</b> to fork it into your library.
+            </p>
+          )}
 
           {/* Field Reference */}
           <div className="border border-slate-200 rounded">
@@ -971,12 +1586,10 @@ function TemplateEditorModal({
                 {/* Results */}
                 <div className="px-4 pb-4 max-h-72 overflow-y-auto scroll-thin">
                   {q ? (
-                    // Flat filtered list
                     filtered.length === 0
                       ? <p className="text-xs text-slate-400 py-2">No placeholders match "{refSearch}".</p>
                       : filtered.map(f => <FieldRow key={f.key} f={f} />)
                   ) : (
-                    // Grouped display
                     groups!.map(([grp, items]) => (
                       <div key={grp} className="mb-3">
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-1.5 border-b border-slate-100 mb-1">{grp}</div>
@@ -994,9 +1607,10 @@ function TemplateEditorModal({
         <div className="flex items-center justify-between px-6 py-4 border-t shrink-0 bg-slate-50 rounded-b-xl">
           <button
             onClick={() => setDraft(DEFAULT_EMAIL_TEMPLATE)}
-            className="px-3 py-2 text-sm border border-slate-300 rounded font-bold text-red-600 hover:bg-red-50 hover:border-red-300 transition"
+            disabled={isDefault}
+            className="px-3 py-2 text-sm border border-slate-300 rounded font-bold text-red-600 hover:bg-red-50 hover:border-red-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Reset to Default
+            Reset to Default Body
           </button>
           <div className="flex gap-2">
             <button
@@ -1006,10 +1620,10 @@ function TemplateEditorModal({
               Cancel
             </button>
             <button
-              onClick={() => { onSave(draft); onClose(); }}
+              onClick={handleSave}
               className="px-4 py-2 text-sm bg-brand-600 text-white rounded font-bold hover:bg-brand-700 transition"
             >
-              Save Template
+              {isDefault ? 'Save As New' : 'Save Template'}
             </button>
           </div>
         </div>

@@ -159,29 +159,43 @@ async function _computeChartCache(
   } catch { topEquipment = []; }
 
   let codeQuality: ChartCache['codeQuality'] = null;
+  let missingCodeWOs: string[] = [];
   if (columnMap?.object_part_code_description) {
     try {
-      const [r] = await query(`
+      // Per-row CTE returns each WO with the two boolean classifications, so we
+      // can extract both the aggregate counts AND the explicit WO list for
+      // missing-codes — used by buildDashboardPayload to keep dashboard.html in
+      // agreement with the live donut even if the rule check ever underreports.
+      const rows = await query(`
         WITH per AS (
           SELECT
+            CAST(work_order_number AS VARCHAR) AS wo,
             UPPER(TRIM(COALESCE(object_part_code_description,''))) AS p,
             UPPER(TRIM(COALESCE(damage_code_description,''))) AS d,
             UPPER(TRIM(COALESCE(cause_code_description,''))) AS c
           FROM v_analysis_scope
         )
         SELECT
-          COUNT(*) FILTER (WHERE p LIKE 'NOT LISTED%' OR d LIKE 'NOT LISTED%' OR c LIKE 'NOT LISTED%') AS not_listed,
-          COUNT(*) FILTER (WHERE p = '' AND d = '' AND c = '') AS missing,
-          COUNT(*) AS total
+          wo,
+          (p LIKE 'NOT LISTED%' OR d LIKE 'NOT LISTED%' OR c LIKE 'NOT LISTED%') AS is_not_listed,
+          (p = '' AND d = '' AND c = '') AS is_missing
         FROM per
       `);
-      const notListed = Number(r?.not_listed ?? 0);
-      const missing = Number(r?.missing ?? 0);
-      const total = Number(r?.total ?? 0);
+      let notListed = 0;
+      let missing = 0;
+      const total = rows.length;
+      for (const r of rows) {
+        if (r.is_not_listed) notListed++;
+        if (r.is_missing) {
+          missing++;
+          const wo = String(r.wo ?? '');
+          if (wo) missingCodeWOs.push(wo);
+        }
+      }
       const invalidHierarchy = new Set(aiFlags.filter(f => f.category === 'desc_code_conflict').map(f => f.woNumber)).size;
       const valid = Math.max(0, total - notListed - missing - invalidHierarchy);
       codeQuality = { valid, notListed, missing, invalidHierarchy };
-    } catch { codeQuality = null; }
+    } catch { codeQuality = null; missingCodeWOs = []; }
   }
 
   const aiWoSet = new Set(aiFlags.map((f) => f.woNumber));
@@ -196,7 +210,7 @@ async function _computeChartCache(
     total: totalWOs,
   };
 
-  return { perWorkCenter, topEquipment, codeQuality, overallQuality, computedAt: new Date().toISOString() };
+  return { perWorkCenter, topEquipment, codeQuality, overallQuality, missingCodeWOs, computedAt: new Date().toISOString() };
 }
 
 // ─── Overall Quality ring chart ──────────────────────────────────────────────

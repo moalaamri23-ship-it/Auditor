@@ -118,30 +118,52 @@ export async function runRuleChecks(opts: RuleCheckOptions): Promise<RuleCheckRe
     );
   }
 
-  // 4. Missing codes — all mapped code description fields blank (mirrors Code Quality donut)
-  //    Uses the same CTE approach as _computeChartCache to guarantee agreement with that chart.
+  // 4. Missing codes — uses the EXACT WHERE pattern from the Code Quality donut
+  //    (proven to work). Avoids the CTE+SELECT-rows path that was empirically failing
+  //    in DuckDB-WASM, and adds explicit CAST(work_order_number AS VARCHAR) so the
+  //    WO list survives any numeric-typed work_order_number column.
   if (has('object_part_code_description')) {
-    const dExpr = has('damage_code_description')
-      ? `UPPER(TRIM(COALESCE(damage_code_description,'')))`
-      : `''`;
-    const cExpr = has('cause_code_description')
-      ? `UPPER(TRIM(COALESCE(cause_code_description,'')))`
-      : `''`;
+    const dCond = has('damage_code_description')
+      ? `AND UPPER(TRIM(COALESCE(damage_code_description,''))) = ''`
+      : '';
+    const cCond = has('cause_code_description')
+      ? `AND UPPER(TRIM(COALESCE(cause_code_description,''))) = ''`
+      : '';
     try {
+      // Step 1: control count via the proven Code Quality WHERE pattern
+      const [countRow] = await query(`
+        SELECT COUNT(*) AS cnt
+        FROM v_analysis_scope
+        WHERE UPPER(TRIM(COALESCE(object_part_code_description,''))) = ''
+          ${dCond}
+          ${cCond}
+      `);
+      const expected = Number(countRow?.cnt ?? 0);
+
+      // Step 2: WO list using the SAME WHERE clause as the count
       const rows = await query(`
-        WITH per AS (
-          SELECT
-            ${woCol} AS wo,
-            UPPER(TRIM(COALESCE(object_part_code_description,''))) AS p,
-            ${dExpr} AS d,
-            ${cExpr} AS c
-          FROM v_analysis_scope
-        )
-        SELECT wo FROM per WHERE p = '' AND d = '' AND c = ''
+        SELECT CAST(work_order_number AS VARCHAR) AS wo
+        FROM v_analysis_scope
+        WHERE UPPER(TRIM(COALESCE(object_part_code_description,''))) = ''
+          ${dCond}
+          ${cCond}
       `);
       const woList = rows.map((r) => String(r.wo ?? '')).filter(Boolean);
+
       perCheck['missing_codes'] = { matched: woList.length, sampleWOs: woList.slice(0, 5) };
       for (const wo of woList) recordFlag(wo, 'missing_codes');
+
+      // Diagnostic: surface any divergence between count and row list, so the
+      // failure mode that caused the original "shows in donut, not in rule list"
+      // bug is never invisible again.
+      if (expected !== woList.length) {
+        console.warn(
+          `[runRuleChecks] missing_codes count/list mismatch: ` +
+          `count(*)=${expected}, returned WO rows=${woList.length}`
+        );
+      } else if (expected > 0) {
+        console.info(`[runRuleChecks] missing_codes matched ${expected} WOs`);
+      }
     } catch (err) {
       console.warn('Rule check missing_codes failed', err);
       perCheck['missing_codes'] = { matched: 0, sampleWOs: [] };

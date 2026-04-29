@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   AppState, AuditProject, AuditRun, AuditType, AuditPeriod,
-  ParsedFile, AIConfig, Screen,
+  ParsedFile, AIConfig, Screen, EmailTemplate,
 } from '../types';
 import { EMPTY_FILTERS } from '../types';
 import { STORAGE_KEYS } from '../constants';
@@ -29,6 +29,8 @@ export const useStore = create<AppState>()(
       },
       reportingEmails: {},
       emailTemplate: null,
+      emailTemplates: [],
+      activeEmailTemplateId: null,
 
       // ── Transient UI state (reset on load) ──────────
       currentScreen: 'projects' as Screen,
@@ -167,6 +169,47 @@ export const useStore = create<AppState>()(
       setEmailTemplate: (template: string | null) => {
         set({ emailTemplate: template });
       },
+
+      // ── Multi-template actions ──────────────────────
+      addEmailTemplate: (name: string, body: string): string => {
+        const id = generateId();
+        const now = new Date().toISOString();
+        const tpl: EmailTemplate = {
+          id,
+          name: name.trim() || `Template ${(get().emailTemplates?.length ?? 0) + 1}`,
+          body,
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => ({
+          emailTemplates: [...(state.emailTemplates ?? []), tpl],
+          activeEmailTemplateId: id,
+        }));
+        return id;
+      },
+
+      updateEmailTemplate: (id: string, updates: Partial<Pick<EmailTemplate, 'name' | 'body'>>) => {
+        set((state) => ({
+          emailTemplates: (state.emailTemplates ?? []).map((t) =>
+            t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t
+          ),
+        }));
+      },
+
+      deleteEmailTemplate: (id: string) => {
+        set((state) => {
+          const remaining = (state.emailTemplates ?? []).filter((t) => t.id !== id);
+          return {
+            emailTemplates: remaining,
+            activeEmailTemplateId:
+              state.activeEmailTemplateId === id ? null : state.activeEmailTemplateId,
+          };
+        });
+      },
+
+      setActiveEmailTemplate: (id: string | null) => {
+        set({ activeEmailTemplateId: id });
+      },
     }),
     {
       name: STORAGE_KEYS.STORE,
@@ -176,8 +219,33 @@ export const useStore = create<AppState>()(
         activeProjectId: state.activeProjectId,
         activeRunId: state.activeRunId,
         aiConfig: state.aiConfig,
-        emailTemplate: state.emailTemplate,
+        emailTemplate: state.emailTemplate,            // legacy — kept for migration
+        emailTemplates: state.emailTemplates,
+        activeEmailTemplateId: state.activeEmailTemplateId,
       }),
+      // One-time migration: if the legacy single-template field has content
+      // but the new library is empty, seed the library with a "Migrated"
+      // entry and select it as active. Idempotent: runs only when the new
+      // library is empty AND the legacy field is set.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const hasLegacy = typeof state.emailTemplate === 'string' && state.emailTemplate.trim().length > 0;
+        const hasNew = Array.isArray(state.emailTemplates) && state.emailTemplates.length > 0;
+        if (hasLegacy && !hasNew) {
+          const now = new Date().toISOString();
+          const id = Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+          state.emailTemplates = [{
+            id,
+            name: 'Custom (migrated)',
+            body: state.emailTemplate as string,
+            createdAt: now,
+            updatedAt: now,
+          }];
+          state.activeEmailTemplateId = id;
+        }
+        if (!Array.isArray(state.emailTemplates)) state.emailTemplates = [];
+        if (state.activeEmailTemplateId === undefined) state.activeEmailTemplateId = null;
+      },
     }
   )
 );

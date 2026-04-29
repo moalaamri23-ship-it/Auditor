@@ -168,6 +168,11 @@ export interface ChartCache {
   topEquipment: Array<{ equipment: string; count: number }>;
   codeQuality: { valid: number; notListed: number; invalidHierarchy: number; missing: number } | null;
   overallQuality: { valid: number; entryQuality: number; missingFields: number; total: number } | null;
+  /** WO numbers whose three code description fields are all blank — derived in
+   *  `_computeChartCache` from the same SQL that drives the Code Quality donut.
+   *  Used as a guarantee patch for `buildDashboardPayload` so that dashboard.html
+   *  Code Quality and Rule Flag tabs stay in agreement with the live donut. */
+  missingCodeWOs: string[];
   computedAt: string;
 }
 
@@ -229,6 +234,17 @@ export interface RuleCheckResult {
   totalWOs: number;
   perCheck: Partial<Record<RuleCheckId, RuleCheckBucket>>;
   flaggedWOs: Array<{ wo: string; checks: RuleCheckId[] }>;
+}
+
+// ─────────────────────────────────────────────
+// EMAIL TEMPLATES (per-user library)
+// ─────────────────────────────────────────────
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ─────────────────────────────────────────────
@@ -308,7 +324,10 @@ export interface AppState {
   activeRunId: string | null;
   aiConfig: AIConfig;
   reportingEmails: Record<string, string>;
+  /** @deprecated kept for one-version migration only — use `emailTemplates` */
   emailTemplate: string | null;
+  emailTemplates: EmailTemplate[];
+  activeEmailTemplateId: string | null;
 
   // Transient UI (not persisted)
   currentScreen: Screen;
@@ -337,5 +356,11 @@ export interface AppState {
   setLoading: (loading: boolean, message?: string) => void;
   updateAIConfig: (config: Partial<AIConfig>) => void;
   setReportingEmail: (workCenter: string, email: string) => void;
+  /** @deprecated kept for one-version migration only — use multi-template actions below */
   setEmailTemplate: (template: string | null) => void;
+  // Multi-template management
+  addEmailTemplate: (name: string, body: string) => string;
+  updateEmailTemplate: (id: string, updates: Partial<Pick<EmailTemplate, 'name' | 'body'>>) => void;
+  deleteEmailTemplate: (id: string) => void;
+  setActiveEmailTemplate: (id: string | null) => void;
 }
