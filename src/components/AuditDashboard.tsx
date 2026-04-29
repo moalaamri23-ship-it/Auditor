@@ -24,7 +24,7 @@ const CQ_COLORS: Record<string, string> = {
   'Valid':             '#22c55e',
   'Not Listed':        '#f59e0b',
   'Invalid Hierarchy': '#ef4444',
-  'Missing Codes':     '#94a3b8',
+  'Missing Fields':    '#94a3b8',
 };
 const OQ_COLORS: Record<string, string> = {
   'Clean WOs':           '#22c55e',
@@ -69,7 +69,7 @@ function buildVisualScopeWhere(
           return `${p}<>'' AND ${d}<>'' AND ${c}<>'' AND ${p} NOT LIKE 'NOT LISTED%' AND ${d} NOT LIKE 'NOT LISTED%' AND ${c} NOT LIKE 'NOT LISTED%'`;
         case 'Not Listed':
           return `(${p} LIKE 'NOT LISTED%' OR ${d} LIKE 'NOT LISTED%' OR ${c} LIKE 'NOT LISTED%')`;
-        case 'Missing Codes':
+        case 'Missing Fields':
           return `${p}='' AND ${d}='' AND ${c}=''`;
         case 'Invalid Hierarchy':
           return `work_order_number IN (SELECT wo_number FROM ai_flags WHERE category = 'desc_code_conflict')`;
@@ -961,16 +961,23 @@ export default function AuditDashboard() {
           {perWorkCenter.length === 0 ? (
             <Empty />
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart
                 data={perWorkCenter}
+                margin={{ bottom: 48 }}
                 style={{ cursor: 'pointer' }}
                 onClick={(data) => {
                   const wc = data?.activePayload?.[0]?.payload?.workCenter;
                   if (wc) handleVisualClick('workCenter', wc);
                 }}
               >
-                <XAxis dataKey="workCenter" tick={{ fontSize: 10 }} />
+                <XAxis
+                  dataKey="workCenter"
+                  tick={{ fontSize: 10 }}
+                  angle={-45}
+                  textAnchor="end"
+                  interval={0}
+                />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -1199,7 +1206,7 @@ function CodeQualityDonut({
     { name: 'Valid',             value: data.valid },
     { name: 'Not Listed',        value: data.notListed },
     { name: 'Invalid Hierarchy', value: data.invalidHierarchy },
-    { name: 'Missing Codes',     value: data.missing },
+    { name: 'Missing Fields',    value: data.missing },
   ].filter((r) => r.value > 0);
   if (rows.length === 0) return <Empty />;
   const total = rows.reduce((s, r) => s + r.value, 0);

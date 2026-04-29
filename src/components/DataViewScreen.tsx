@@ -209,7 +209,7 @@ export default function DataViewScreen() {
             ) : (
               <div className="overflow-auto scroll-thin" style={{ maxHeight: 'calc(100vh - 320px)' }}>
                 <table className="text-xs w-max min-w-full">
-                  <thead className="sticky top-0 bg-slate-50 z-10">
+                  <thead className="sticky top-0 bg-slate-50 z-[1]">
                     <tr>
                       {tableData.columns.map((col) => (
                         <th

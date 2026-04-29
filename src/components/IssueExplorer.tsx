@@ -374,7 +374,7 @@ function DataTab({
       ) : (
         <div className="overflow-auto scroll-thin" style={{ maxHeight: 600 }}>
           <table className="text-xs w-max min-w-full">
-            <thead className="sticky top-0 bg-slate-50 z-10">
+            <thead className="sticky top-0 bg-slate-50 z-[1]">
               <tr>
                 {columns.map((col) => (
                   <th

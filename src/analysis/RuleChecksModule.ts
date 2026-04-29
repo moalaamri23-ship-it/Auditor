@@ -118,15 +118,16 @@ export async function runRuleChecks(opts: RuleCheckOptions): Promise<RuleCheckRe
     );
   }
 
-  // 4. Missing codes — all three code description fields blank (no catalog required)
-  if (has('object_part_code_description') && has('damage_code_description') && has('cause_code_description')) {
-    await runCheck(
-      'missing_codes',
-      woCol,
-      `(object_part_code_description IS NULL OR TRIM(CAST(object_part_code_description AS VARCHAR)) = '')
-       AND (damage_code_description IS NULL OR TRIM(CAST(damage_code_description AS VARCHAR)) = '')
-       AND (cause_code_description IS NULL OR TRIM(CAST(cause_code_description AS VARCHAR)) = '')`,
-    );
+  // 4. Missing codes — all mapped code description fields blank (mirrors Code Quality donut)
+  if (has('object_part_code_description')) {
+    const pBlank = `(TRIM(COALESCE(CAST(object_part_code_description AS VARCHAR), '')) = '')`;
+    const dBlank = has('damage_code_description')
+      ? `AND (TRIM(COALESCE(CAST(damage_code_description AS VARCHAR), '')) = '')`
+      : '';
+    const cBlank = has('cause_code_description')
+      ? `AND (TRIM(COALESCE(CAST(cause_code_description AS VARCHAR), '')) = '')`
+      : '';
+    await runCheck('missing_codes', woCol, `${pBlank} ${dBlank} ${cBlank}`);
   } else {
     perCheck['missing_codes'] = { matched: 0, sampleWOs: [] };
   }
