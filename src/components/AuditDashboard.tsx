@@ -196,7 +196,23 @@ async function _computeChartCache(
     total: totalWOs,
   };
 
-  return { perWorkCenter, topEquipment, codeQuality, overallQuality, computedAt: new Date().toISOString() };
+  // Fetch the WO list for missing_codes (columns are already clean VARCHAR — use simple = '' conditions)
+  let missingCodeWOs: string[] = [];
+  if (columnMap?.object_part_code_description) {
+    const conds = [`object_part_code_description = ''`];
+    if (columnMap?.damage_code_description) conds.push(`damage_code_description = ''`);
+    if (columnMap?.cause_code_description) conds.push(`cause_code_description = ''`);
+    try {
+      const rows = await query(
+        `SELECT CAST(work_order_number AS VARCHAR) AS wo FROM v_analysis_scope WHERE ${conds.join(' AND ')}`
+      );
+      missingCodeWOs = rows.map((r) => String(r.wo ?? '')).filter(Boolean);
+      // Keep codeQuality.missing in sync with the authoritative list
+      if (codeQuality) codeQuality = { ...codeQuality, missing: missingCodeWOs.length };
+    } catch { missingCodeWOs = []; }
+  }
+
+  return { perWorkCenter, topEquipment, codeQuality, overallQuality, missingCodeWOs, computedAt: new Date().toISOString() };
 }
 
 // ─── Overall Quality ring chart ──────────────────────────────────────────────
@@ -790,6 +806,30 @@ export default function AuditDashboard() {
       });
       const flags = results.aiFlagSummary ? await queryAIFlags() : [];
       const chartCache = await _computeChartCache(run.columnMap, results.ruleChecks, flags);
+
+      // Ensure missing_codes is consistent with the authoritative chartCache list.
+      // The rule SQL may return 0 on older DuckDB WASM builds; chartCache is always correct.
+      const mcWOs = chartCache.missingCodeWOs;
+      if (mcWOs.length > 0) {
+        const existingBucket = results.ruleChecks.perCheck['missing_codes'];
+        if (!existingBucket || existingBucket.matched === 0) {
+          const existingWoSet = new Set(results.ruleChecks.flaggedWOs.map((f) => f.wo));
+          results.ruleChecks = {
+            ...results.ruleChecks,
+            perCheck: {
+              ...results.ruleChecks.perCheck,
+              missing_codes: { matched: mcWOs.length, sampleWOs: mcWOs.slice(0, 5) },
+            },
+            flaggedWOs: [
+              ...results.ruleChecks.flaggedWOs,
+              ...mcWOs
+                .filter((wo) => !existingWoSet.has(wo))
+                .map((wo) => ({ wo, checks: ['missing_codes' as RuleCheckId] })),
+            ],
+          };
+        }
+      }
+
       updateRun(run.id, {
         ruleChecks: results.ruleChecks,
         aiFlagSummary: results.aiFlagSummary ?? null,

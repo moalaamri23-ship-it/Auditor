@@ -213,9 +213,18 @@ export default function IssueExplorer() {
 
   const filteredRuleFlags = useMemo(() => {
     if (!run?.ruleChecks) return [];
-    if (scopeWoSet === null) return run.ruleChecks.flaggedWOs;
-    return run.ruleChecks.flaggedWOs.filter((f) => scopeWoSet.has(f.wo));
-  }, [run?.ruleChecks, scopeWoSet]);
+    // Supplement with chartCache missingCodeWOs — the authoritative source for blank-code WOs,
+    // which may not be in ruleChecks.flaggedWOs if the run predates the missing_codes rule.
+    const base = run.ruleChecks.flaggedWOs;
+    const cached = run.chartCache?.missingCodeWOs ?? [];
+    const baseWoSet = new Set(base.map((f) => f.wo));
+    const extra = cached
+      .filter((wo) => !baseWoSet.has(wo))
+      .map((wo) => ({ wo, checks: ['missing_codes' as RuleCheckId] }));
+    const all = extra.length > 0 ? [...base, ...extra] : base;
+    if (scopeWoSet === null) return all;
+    return all.filter((f) => scopeWoSet.has(f.wo));
+  }, [run?.ruleChecks, run?.chartCache, scopeWoSet]);
 
   const filteredAIFlags = useMemo(() => {
     if (!run?.aiFlags) return [];

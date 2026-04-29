@@ -398,7 +398,12 @@ export default function AuditReportScreen() {
     ] as const;
 
     const errorDistribution = [
-      ...RULE_KEYS.map(key => ({ key, label: RULE_LABELS[key], value: wc.ruleDistribution[key] ?? 0, type: 'Rule' })),
+      ...RULE_KEYS.map(key => {
+        let value = wc.ruleDistribution[key] ?? 0;
+        // missing_codes: supplement from chartCache when ruleDistribution is stale
+        if (key === 'missing_codes' && value === 0) value = missingCodeWOs.size;
+        return { key, label: RULE_LABELS[key], value, type: 'Rule' };
+      }),
       ...AI_KEYS.map(key  => ({ key, label: AI_LABELS[key],   value: wc.aiDistribution[key]  ?? 0, type: 'AI'   })),
     ];
 
@@ -438,11 +443,13 @@ export default function AuditReportScreen() {
       wcRuleWOs.filter(fw => fw.checks.includes('not_listed_codes')).map(fw => fw.wo));
     const invalidHierarchyWOs = new Set(
       wcAIFlags.filter(f => f.category === 'desc_code_conflict').map(f => f.woNumber));
+    // Use chartCache missingCodeWOs as authoritative source (it's always correct from DuckDB SQL).
+    // Fall back to ruleChecks-derived list for runs that have it.
+    const cachedMCWOs = (run?.chartCache?.missingCodeWOs ?? []).filter(wo => woSet.has(wo));
+    const ruleMCWOs  = wcRuleWOs.filter(fw => fw.checks.includes('missing_codes')).map(fw => fw.wo);
+    const mcSource   = cachedMCWOs.length > 0 ? cachedMCWOs : ruleMCWOs;
     const missingCodeWOs = new Set(
-      wcRuleWOs.filter(fw =>
-        fw.checks.includes('missing_codes') &&
-        !notListedWOs.has(fw.wo) && !invalidHierarchyWOs.has(fw.wo)
-      ).map(fw => fw.wo));
+      mcSource.filter(wo => !notListedWOs.has(wo) && !invalidHierarchyWOs.has(wo)));
     const allCodeIssueWOs = new Set([...notListedWOs, ...invalidHierarchyWOs, ...missingCodeWOs]);
     const codeQuality = {
       valid: wc.totalWOs - allCodeIssueWOs.size,
