@@ -118,13 +118,16 @@ export async function runRuleChecks(opts: RuleCheckOptions): Promise<RuleCheckRe
     );
   }
 
-  // 4. Missing codes — all mapped code description fields blank (mirrors Code Quality donut).
-  //    Columns are already TRIM'd, non-null VARCHAR after _createTypedTable(), so no wrappers needed.
+  // 4. Missing codes — all mapped code description fields blank (mirrors Code Quality donut)
   if (has('object_part_code_description')) {
-    const conds = [`object_part_code_description = ''`];
-    if (has('damage_code_description')) conds.push(`damage_code_description = ''`);
-    if (has('cause_code_description')) conds.push(`cause_code_description = ''`);
-    await runCheck('missing_codes', woCol, conds.join(' AND '));
+    const pBlank = `(TRIM(COALESCE(CAST(object_part_code_description AS VARCHAR), '')) = '')`;
+    const dBlank = has('damage_code_description')
+      ? `AND (TRIM(COALESCE(CAST(damage_code_description AS VARCHAR), '')) = '')`
+      : '';
+    const cBlank = has('cause_code_description')
+      ? `AND (TRIM(COALESCE(CAST(cause_code_description AS VARCHAR), '')) = '')`
+      : '';
+    await runCheck('missing_codes', woCol, `${pBlank} ${dBlank} ${cBlank}`);
   } else {
     perCheck['missing_codes'] = { matched: 0, sampleWOs: [] };
   }

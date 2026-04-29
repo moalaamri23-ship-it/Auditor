@@ -168,8 +168,6 @@ export interface ChartCache {
   topEquipment: Array<{ equipment: string; count: number }>;
   codeQuality: { valid: number; notListed: number; invalidHierarchy: number; missing: number } | null;
   overallQuality: { valid: number; entryQuality: number; missingFields: number; total: number } | null;
-  /** WO numbers where all three code description fields are blank — authoritative source for missing_codes rule. */
-  missingCodeWOs: string[];
   computedAt: string;
 }
 
