@@ -10,7 +10,7 @@ function generateId(): string {
 }
 
 export default function ProjectsDashboard() {
-  const { projects, setScreen, setActiveProject, setActiveRun, deleteProject, importProject, updateRun, setLoading } = useStore();
+  const { projects, setScreen, setActiveProject, setActiveRun, deleteProject, importProject, setLoading } = useStore();
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,12 +64,13 @@ export default function ProjectsDashboard() {
 
       importProject(newProject, newRuns);
 
-      // Restore raw data into IndexedDB for runs that have it
+      // Restore raw data into IndexedDB for runs that have it.
+      // Do NOT set hasDataInDB: true here — DuckDB is still empty at this point.
+      // useRunAutoRestore will detect hasDataInDB=false, load IndexedDB → DuckDB, then flip the flag.
       for (const run of payload.runs as Array<AuditRun & { rawData?: { rows: Record<string, string>[]; columnMap: Record<string, string> } | null }>) {
         if (run.rawData?.rows && run.rawData?.columnMap) {
           const newRunId = idMap[run.id];
           await saveRunData(newRunId, run.rawData.rows, run.rawData.columnMap);
-          updateRun(newRunId, { hasDataInDB: true });
         }
       }
 

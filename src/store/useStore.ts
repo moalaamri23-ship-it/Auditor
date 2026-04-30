@@ -238,6 +238,11 @@ export const useStore = create<AppState>()(
       // library is empty AND the legacy field is set.
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        // DuckDB is in-memory and cleared on every page load — always start with false
+        // so charts fall back to chartCache and useRunAutoRestore can rebuild from IndexedDB
+        if (Array.isArray(state.runs)) {
+          state.runs = state.runs.map((r) => ({ ...r, hasDataInDB: false }));
+        }
         const hasLegacy = typeof state.emailTemplate === 'string' && state.emailTemplate.trim().length > 0;
         const hasNew = Array.isArray(state.emailTemplates) && state.emailTemplates.length > 0;
         if (hasLegacy && !hasNew) {
