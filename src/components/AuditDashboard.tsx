@@ -1020,10 +1020,10 @@ export default function AuditDashboard() {
           {perWorkCenter.length === 0 ? (
             <Empty />
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={340}>
               <BarChart
                 data={perWorkCenter}
-                margin={{ bottom: 90 }}
+                margin={{ bottom: 80 }}
                 style={{ cursor: 'pointer' }}
                 onClick={(data) => {
                   const wc = data?.activePayload?.[0]?.payload?.workCenter;
@@ -1041,7 +1041,7 @@ export default function AuditDashboard() {
                 />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
                 <Bar dataKey="total" name="Total" fill="#94a3b8">
                   {perWorkCenter.map((d, i) => (
                     <Cell
