@@ -34,27 +34,29 @@ Each work order record has:
 Detect inconsistencies and classify them. Use these category ids verbatim:
 
 - desc_code_conflict
-   The DESCRIPTION clearly identifies a component or failure mode, but the CODES name something different (e.g. description says "bearing noise" but damage_code = "Plugged/Choked").
+   First, synthesize the work order context by reading the DESCRIPTION together with ALL confirmation texts (conf + conf_long across all rows) to understand what the actual issue is. Then evaluate the CODES (part, damage, cause) against that combined understanding.
+   Raise this flag ONLY when the codes are clearly and unambiguously naming a different component or failure mode — near-relevant or partially-matching codes should NOT be flagged.
+   Do NOT raise this flag for "Not Listed" codes — those are handled separately by false_not_listed and rule-based checks.
 - false_not_listed
-   CODES contain "Not Listed" / "Not Listed(Description Must Be Provided)" but DESCRIPTION or CONFIRMATION clearly imply a known catalog entry AND CATALOG_HINT contains a fitting tuple.
-   Do NOT raise this flag merely because codes say "Not Listed" — bare "Not Listed" codes are already caught by rule-based checks.
-   ONLY raise it when ALL of the following are true: (a) CATALOG_HINT is non-empty, (b) CATALOG_HINT contains a tuple that clearly matches the described failure, (c) DESCRIPTION or CONFIRMATION explicitly names or implies that specific component/failure mode.
-   The "suggested" field MUST be populated with the best matching codes from CATALOG_HINT.
+   Skip this flag entirely if ALL three codes (part, damage, cause) are "Not Listed" / "Not Listed(Description Must Be Provided)" — that case is already caught by rule-based checks.
+   Otherwise, begin evaluation: understand the issue from DESCRIPTION + ALL confirmation texts (conf + conf_long). Then inspect CATALOG_HINT and determine whether it contains codes that describe the issue more accurately than the codes currently recorded (whether those codes are "Not Listed" or real but suboptimal).
+   Raise this flag when CATALOG_HINT contains a tuple that clearly matches the described failure better than what was recorded. Populate the "suggested" field with the best matching (part, damage, cause) tuple from CATALOG_HINT.
+   Do NOT raise if CATALOG_HINT is empty — there is no reference to compare against.
 - desc_confirmation_mismatch
-   DESCRIPTION asks for one thing but CONFIRMATION (or CONFIRMATION_LONG) reports a clearly different scope of work (e.g. description says "replace pump seal", confirmation says "painted enclosure").
-   Do NOT flag if CONFIRMATION is empty or blank — empty confirmations are caught by rule-based checks.
+   Build an understanding of the intended work from DESCRIPTION + CODES together. Then evaluate each confirmation entry. Raise this flag ONLY when a confirmation (conf or conf_long) is explicitly detailed and clearly describes a different scope of work — specific enough to be certain it is off-topic (e.g. description says "replace pump seal", confirmation says "painted enclosure and checked wiring").
+   Do NOT raise if the confirmation is generic, vague, or too short to determine relevance — that belongs to generic_confirmation.
+   Do NOT raise if CONFIRMATION is empty or blank — empty confirmations are caught by rule-based checks.
 - desc_code_confirmation_misalign
-   All three of DESCRIPTION, CODES, CONFIRMATION contradict each other.
-   Do NOT flag if CONFIRMATION is empty or blank — empty confirmations are caught by rule-based checks.
+   Raise this flag only when all three artefacts — DESCRIPTION, CODES, and CONFIRMATION — are simultaneously populated AND each one points to a completely different subject matter with no meaningful overlap between any pair. The bar is very high: every element must be "in its own world."
+   Do NOT raise if the confirmation is generic or vague — use generic_confirmation instead.
+   Do NOT raise if CONFIRMATION is empty or blank — empty confirmations are caught by rule-based checks.
 - generic_description
-   DESCRIPTION is present but too vague to be useful for an auditor: "PM job", "Repair", "Maintenance", "Check equipment".
-   Do NOT raise this flag if DESCRIPTION is empty or blank — empty descriptions are already caught by rule-based checks.
-   Only flag when DESCRIPTION is PRESENT but conveys no specific information about what was requested.
+   DESCRIPTION is present but too vague to stand alone as a maintenance request: "PM job", "Repair", "Maintenance", "Check equipment". Evaluate the description in isolation — do not consider codes or confirmations when deciding this flag.
+   Do NOT raise if DESCRIPTION is empty or blank — empty descriptions are already caught by rule-based checks.
 - generic_confirmation
-   CONFIRMATION provides no useful information beyond restating the description: "work done", "completed", "OK", or copy-pasted description.
-   Do NOT raise this flag if CONFIRMATION is empty or blank — empty confirmations are already caught by rule-based checks.
-   Before raising this flag, check CONFIRMATION_LONG — if CONFIRMATION_LONG provides sufficient detail or clear resolution of the work performed, do NOT raise generic_confirmation.
-   Only flag when BOTH CONFIRMATION and CONFIRMATION_LONG are PRESENT but vague or uninformative.
+   CONFIRMATION text is present but provides no useful information: "work done", "completed", "OK", or a copy of the description. Check CONFIRMATION_LONG: if it adds meaningful detail or clearly explains the work performed, do NOT flag.
+   Raise this flag when CONFIRMATION is generic/vague AND CONFIRMATION_LONG either (a) is also vague or uninformative, OR (b) is empty/blank — an empty long text does not rescue a generic short confirmation.
+   Do NOT raise if CONFIRMATION itself is empty or blank — empty confirmations are caught by rule-based checks.
 
 RULES:
 - One WO can have multiple flags from different categories.
@@ -63,7 +65,7 @@ RULES:
 - Keep the comment under 150 characters.
 - For false_not_listed: if CATALOG_HINT is empty, do NOT raise this flag — there is no reference to compare against.
 - For desc_confirmation_mismatch and desc_code_confirmation_misalign: evaluate each confirmation row independently — include "row" in the output to identify which confirmation entry is problematic.
-- For generic_confirmation: evaluate each confirmation row independently — include "row" to identify which row is vague. Only flag if BOTH conf and conf_long of that row are vague or uninformative.
+- For generic_confirmation: evaluate each confirmation row independently — include "row" to identify which row is vague.
 - CRITICAL: Do NOT raise any flag solely because a field is empty/blank or contains "Not Listed". Rule-based pre-checks already handle those patterns. Your role is exclusively to detect quality issues in POPULATED fields — text that is present but misleading, vague, or inconsistent.
 - Return ONLY a JSON array — no prose, no markdown fences. If nothing is wrong return [].
 

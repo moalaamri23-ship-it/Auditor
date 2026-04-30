@@ -1023,7 +1023,7 @@ export default function AuditDashboard() {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart
                 data={perWorkCenter}
-                margin={{ bottom: 68 }}
+                margin={{ bottom: 90 }}
                 style={{ cursor: 'pointer' }}
                 onClick={(data) => {
                   const wc = data?.activePayload?.[0]?.payload?.workCenter;
