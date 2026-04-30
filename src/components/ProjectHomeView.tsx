@@ -54,6 +54,7 @@ export default function ProjectHomeView() {
       const payload = {
         exportedAt: new Date().toISOString(),
         appVersion: 'sap-auditor-v2',
+        schemaVersion: 1,
         project,
         runs: exportRuns,
       };

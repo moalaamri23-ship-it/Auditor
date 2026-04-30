@@ -38,6 +38,15 @@ export const useStore = create<AppState>()(
       loadingMessage: '',
 
       // ── Project actions ─────────────────────────────
+      importProject: (project: AuditProject, runs: AuditRun[]) => {
+        set((state) => ({
+          projects: [project, ...state.projects],
+          runs: [...runs, ...state.runs],
+          activeProjectId: project.id,
+          activeRunId: null,
+        }));
+      },
+
       createProject: (input: {
         name: string;
         type: AuditType;

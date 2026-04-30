@@ -335,6 +335,7 @@ export interface AppState {
   loadingMessage: string;
 
   // Actions — projects
+  importProject: (project: AuditProject, runs: AuditRun[]) => void;
   createProject: (input: {
     name: string;
     type: AuditType;
