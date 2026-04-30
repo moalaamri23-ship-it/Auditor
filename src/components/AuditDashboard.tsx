@@ -1041,7 +1041,7 @@ export default function AuditDashboard() {
                 />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
+                <Legend verticalAlign="top" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} />
                 <Bar dataKey="total" name="Total" fill="#94a3b8">
                   {perWorkCenter.map((d, i) => (
                     <Cell
