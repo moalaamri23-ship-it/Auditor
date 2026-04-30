@@ -1245,9 +1245,25 @@ function TemplateEditorModal(props: TemplateEditorModalProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleCopy = (key: string) => {
-    navigator.clipboard.writeText(key).catch(() => {});
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 1500);
+    const confirm = () => { setCopiedKey(key); setTimeout(() => setCopiedKey(null), 1500); };
+    const fallback = () => {
+      try {
+        const el = document.createElement('textarea');
+        el.value = key;
+        el.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        confirm();
+      } catch { /* ignore */ }
+    };
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(key).then(confirm).catch(fallback);
+    } else {
+      fallback();
+    }
   };
 
   // Insert text at the cursor position; replace selection if any
