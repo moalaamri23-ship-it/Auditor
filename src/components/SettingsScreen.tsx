@@ -12,7 +12,11 @@ import type { FailureCatalog } from '../types';
 
 type ProviderKey = keyof typeof AI_PROVIDERS;
 
-const PROVIDER_KEYS = Object.keys(AI_PROVIDERS) as ProviderKey[];
+// In the deployed (production) build, only Copilot and OpenRouter are exposed.
+// The full provider list is available in local dev only.
+const DEPLOYED_PROVIDERS: ProviderKey[] = ['copilot', 'openrouter'];
+const PROVIDER_KEYS = (Object.keys(AI_PROVIDERS) as ProviderKey[])
+  .filter((p) => !import.meta.env.PROD || DEPLOYED_PROVIDERS.includes(p));
 
 // Static fallback lists — used when live fetch hasn't run yet or provider is Azure/OpenRouter/Copilot
 const FALLBACK_MODELS: Record<ProviderKey, string[]> = {
@@ -33,7 +37,11 @@ type TestStatus = null | 'testing' | 'ok' | 'error';
 export default function SettingsScreen() {
   const { aiConfig, updateAIConfig } = useStore();
 
-  const [localProvider,  setLocalProvider]  = useState<ProviderKey>(aiConfig.provider as ProviderKey);
+  const [localProvider,  setLocalProvider]  = useState<ProviderKey>(() => {
+    const p = aiConfig.provider as ProviderKey;
+    // In deployed build, fall back to a listed provider if the stored one is hidden.
+    return PROVIDER_KEYS.includes(p) ? p : PROVIDER_KEYS[0];
+  });
   const [localKey,       setLocalKey]       = useState(aiConfig.apiKey);
   const [localModelId,   setLocalModelId]   = useState(aiConfig.modelId);
   const [localEndpoint,          setLocalEndpoint]          = useState('');
