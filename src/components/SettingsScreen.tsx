@@ -24,7 +24,7 @@ const FALLBACK_MODELS: Record<ProviderKey, string[]> = {
   copilot:    [],
 };
 
-const FETCHABLE = new Set(['gemini', 'openai', 'anthropic']);
+const FETCHABLE = new Set(['gemini', 'openai', 'anthropic', 'openrouter']);
 const MODEL_CACHE_KEY = 'auditor_models_cache';
 const TTL = 24 * 60 * 60 * 1000;
 
@@ -48,15 +48,22 @@ export default function SettingsScreen() {
   });
   const [modelsFetching, setModelsFetching] = useState(false);
 
-  // Auto-fetch live models when provider or key changes (respects 24h TTL)
-  useEffect(() => {
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
+  // Fetch live models for the current provider. force=true bypasses the 24h TTL.
+  // OpenRouter's models endpoint is public, so it does not require an API key.
+  const runFetchModels = (force: boolean) => {
     if (!FETCHABLE.has(localProvider)) return;
-    if (!localKey || localKey.length < 10) return;
-    const cached = liveModels[localProvider];
-    if (cached && Date.now() - cached.fetchedAt < TTL) return;
+    const needsKey = localProvider !== 'openrouter';
+    if (needsKey && (!localKey || localKey.length < 10)) return;
+    if (!force) {
+      const cached = liveModels[localProvider];
+      if (cached && Date.now() - cached.fetchedAt < TTL) return;
+    }
 
     setModelsFetching(true);
-    fetchModels(localProvider as 'gemini' | 'openai' | 'anthropic', localKey)
+    setModelsError(null);
+    fetchModels(localProvider as 'gemini' | 'openai' | 'anthropic' | 'openrouter', localKey)
       .then(tiered => {
         setLiveModels(prev => {
           const next = { ...prev, [localProvider]: tiered };
@@ -64,8 +71,16 @@ export default function SettingsScreen() {
           return next;
         });
       })
-      .catch(e => console.warn('[ModelFetch]', e))
+      .catch(e => {
+        console.warn('[ModelFetch]', e);
+        setModelsError(e instanceof Error ? e.message : 'Failed to fetch models');
+      })
       .finally(() => setModelsFetching(false));
+  };
+
+  // Auto-fetch live models when provider or key changes (respects 24h TTL)
+  useEffect(() => {
+    runFetchModels(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localProvider, localKey]);
 
@@ -148,14 +163,28 @@ export default function SettingsScreen() {
                   {localProvider === 'openrouter' && <span className="text-red-500 ml-1">*</span>}
                 </label>
                 {FETCHABLE.has(localProvider) && (
-                  <span className="text-[10px] text-slate-400">
-                    {modelsFetching
-                      ? 'Fetching live models…'
-                      : cachedAt
-                        ? `Updated ${new Date(cachedAt).toLocaleDateString()}`
-                        : 'Enter API key to load live models'
-                    }
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400">
+                      {modelsFetching
+                        ? 'Fetching live models…'
+                        : modelsError
+                          ? `Fetch failed: ${modelsError}`
+                          : cachedAt
+                            ? `Updated ${new Date(cachedAt).toLocaleDateString()}`
+                            : localProvider === 'openrouter'
+                              ? 'Click Fetch to load models'
+                              : 'Enter API key to load live models'
+                      }
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => runFetchModels(true)}
+                      disabled={modelsFetching || (localProvider !== 'openrouter' && (!localKey || localKey.length < 10))}
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded border border-brand-600 text-brand-700 hover:bg-brand-600/10 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Fetch
+                    </button>
+                  </div>
                 )}
               </div>
               <ModelSelector
@@ -164,11 +193,10 @@ export default function SettingsScreen() {
                 liveModels={liveModels[localProvider] ?? null}
                 fallbackModels={FALLBACK_MODELS[localProvider]}
                 provider={localProvider}
-                allowCustomList={localProvider === 'openrouter'}
               />
               {localProvider === 'openrouter' && (
                 <p className="text-xs text-slate-400 mt-1">
-                  Add any OpenRouter model ID (e.g. anthropic/claude-sonnet-4-6, meta-llama/llama-3-70b-instruct)
+                  Click Fetch to load the live OpenRouter model list, or enter any model ID (e.g. anthropic/claude-sonnet-4-6).
                 </p>
               )}
             </div>

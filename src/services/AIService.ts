@@ -270,7 +270,7 @@ export interface TieredModels {
   fetchedAt: number;
 }
 
-type FetchableProvider = 'gemini' | 'openai' | 'anthropic';
+type FetchableProvider = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
 
 export async function fetchModels(provider: FetchableProvider, apiKey: string): Promise<TieredModels> {
   let all: string[] = [];
@@ -309,6 +309,16 @@ export async function fetchModels(provider: FetchableProvider, apiKey: string): 
     if (!res.ok) throw new Error(`Anthropic models fetch failed: ${res.status}`);
     const data = await res.json();
     all = (data.data || []).map((m: any) => m.id as string);
+
+  } else if (provider === 'openrouter') {
+    const res = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {},
+    });
+    if (!res.ok) throw new Error(`OpenRouter models fetch failed: ${res.status}`);
+    const data = await res.json();
+    all = (data.data || [])
+      .map((m: any) => m.id as string)
+      .filter(Boolean);
   }
 
   return _classifyModels(all);
