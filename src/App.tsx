@@ -24,9 +24,12 @@ export default function App() {
   const { currentScreen } = useStore();
   const [dbState, setDbState] = useState<DBState>('loading');
   const [dbError, setDbError] = useState('');
+  const [dbStatus, setDbStatus] = useState('Loading WASM modules…');
+  const [initAttempt, setInitAttempt] = useState(0);
 
   useEffect(() => {
-    initDB()
+    setDbState('loading');
+    initDB(setDbStatus)
       .then(async () => {
         await ensureCatalogLoaded().catch(() => {});
         // Database is in-memory — runs lose their data on refresh
@@ -40,7 +43,7 @@ export default function App() {
         setDbError(err.message);
         setDbState('error');
       });
-  }, []);
+  }, [initAttempt]);
 
   if (dbState === 'error') {
     return (
@@ -56,7 +59,10 @@ export default function App() {
             (Chrome 90+, Firefox 88+, Safari 15+).
           </div>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              setDbStatus('Retrying…');
+              setInitAttempt((n) => n + 1);
+            }}
             className="mt-4 bg-slate-900 text-white px-4 py-2 rounded text-sm font-bold"
           >
             Retry
@@ -84,7 +90,7 @@ export default function App() {
             </div>
             <div className="text-center">
               <div className="font-semibold text-slate-700 text-sm">Initialising Database engine…</div>
-              <div className="text-xs text-slate-400 mt-1">Loading WASM modules…</div>
+              <div className="text-xs text-slate-400 mt-1">{dbStatus}</div>
             </div>
           </div>
         )}

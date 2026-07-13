@@ -1,4 +1,6 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
+import mvpWorkerUrl from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
+import ehWorkerUrl from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import type {
   ColumnMap,
   DataProfile,
@@ -27,27 +29,166 @@ let _db: duckdb.AsyncDuckDB | null = null;
 let _conn: duckdb.AsyncDuckDBConnection | null = null;
 let _initPromise: Promise<void> | null = null;
 
-export async function initDB(): Promise<void> {
+const WASM_CACHE_NAME = 'duckdb-wasm-cache-v1';
+const STALL_TIMEOUT_MS = 20_000;
+
+/**
+ * Download a URL with per-chunk stall detection: aborts if no bytes arrive
+ * for STALL_TIMEOUT_MS, so a dead CDN connection fails instead of hanging.
+ */
+async function downloadWithProgress(
+  url: string,
+  onProgress?: (msg: string) => void
+): Promise<Uint8Array<ArrayBuffer>> {
+  const controller = new AbortController();
+  let stallTimer = setTimeout(() => controller.abort(), STALL_TIMEOUT_MS);
+  const resetStall = () => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => controller.abort(), STALL_TIMEOUT_MS);
+  };
+
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${new URL(url).host}`);
+    resetStall();
+
+    if (!resp.body) return new Uint8Array(await resp.arrayBuffer());
+
+    // Content-Length is the compressed size; received bytes are decompressed,
+    // so only use it as a rough total for display.
+    const total = Number(resp.headers.get('Content-Length')) || 0;
+    const reader = resp.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      resetStall();
+      chunks.push(value);
+      received += value.length;
+      const mb = Math.round(received / 1048576);
+      onProgress?.(
+        total && received <= total
+          ? `Downloading engine… ${mb} / ${Math.round(total / 1048576)} MB`
+          : `Downloading engine… ${mb} MB`
+      );
+    }
+
+    const out = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return out;
+  } finally {
+    clearTimeout(stallTimer);
+  }
+}
+
+/**
+ * Resolve the DuckDB WASM binary to a local blob URL.
+ * Order: Cache API hit (instant, offline-safe) → jsDelivr → unpkg fallback.
+ * A successful download is stored in the Cache API for future launches.
+ */
+async function fetchWasmWithCache(
+  url: string,
+  onProgress?: (msg: string) => void
+): Promise<string> {
+  // Cache API is unavailable in insecure contexts / some private modes.
+  if (typeof caches !== 'undefined') {
+    try {
+      const cache = await caches.open(WASM_CACHE_NAME);
+      const hit = await cache.match(url);
+      if (hit) {
+        onProgress?.('Loading engine from local cache…');
+        return URL.createObjectURL(await hit.blob());
+      }
+    } catch {
+      /* ignore — fall through to network */
+    }
+  }
+
+  const sources = [url, url.replace('https://cdn.jsdelivr.net/npm/', 'https://unpkg.com/')];
+  let lastError: unknown = null;
+
+  for (const source of sources) {
+    try {
+      const bytes = await downloadWithProgress(source, onProgress);
+
+      if (typeof caches !== 'undefined') {
+        try {
+          const cache = await caches.open(WASM_CACHE_NAME);
+          await cache.put(
+            url,
+            new Response(bytes, { headers: { 'Content-Type': 'application/wasm' } })
+          );
+          // Evict WASM binaries from older package versions.
+          for (const key of await cache.keys()) {
+            if (key.url !== url) await cache.delete(key);
+          }
+        } catch {
+          /* quota / private mode — caching is best-effort */
+        }
+      }
+
+      return URL.createObjectURL(new Blob([bytes], { type: 'application/wasm' }));
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw new Error(
+    `Could not download the database engine (${
+      lastError instanceof Error ? lastError.message : 'network error'
+    }). Check your internet connection and retry.`
+  );
+}
+
+export async function initDB(onProgress?: (msg: string) => void): Promise<void> {
   if (_conn) return;
   if (_initPromise) return _initPromise;
 
   _initPromise = (async () => {
-    const bundles = duckdb.getJsDelivrBundles();
-    const bundle = await duckdb.selectBundle(bundles);
+    // Workers are bundled with the app (same origin); only the large WASM
+    // binary comes from the CDN — and only until the Cache API has it.
+    const jsdelivr = duckdb.getJsDelivrBundles();
+    const bundle = await duckdb.selectBundle({
+      mvp: { mainModule: jsdelivr.mvp!.mainModule, mainWorker: mvpWorkerUrl },
+      eh: { mainModule: jsdelivr.eh!.mainModule, mainWorker: ehWorkerUrl },
+    });
 
-    const workerUrl = URL.createObjectURL(
-      new Blob([`importScripts("${bundle.mainWorker!}");`], { type: 'text/javascript' })
-    );
-    const worker = new Worker(workerUrl);
-    const logger = new duckdb.VoidLogger();
-    _db = new duckdb.AsyncDuckDB(logger, worker);
-    await _db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-    URL.revokeObjectURL(workerUrl);
+    const wasmUrl = await fetchWasmWithCache(bundle.mainModule, onProgress);
+    onProgress?.('Starting database engine…');
 
-    _conn = await _db.connect();
+    const worker = new Worker(bundle.mainWorker!);
+    const workerFailed = new Promise<never>((_, reject) => {
+      worker.onerror = (ev) =>
+        reject(new Error(ev.message || 'Database worker failed to start.'));
+    });
+
+    const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
+    try {
+      await Promise.race([db.instantiate(wasmUrl, bundle.pthreadWorker), workerFailed]);
+    } catch (err) {
+      worker.terminate();
+      throw err;
+    } finally {
+      URL.revokeObjectURL(wasmUrl);
+    }
+    worker.onerror = null;
+
+    _db = db;
+    _conn = await db.connect();
   })();
 
-  return _initPromise;
+  try {
+    return await _initPromise;
+  } catch (err) {
+    _initPromise = null; // allow a clean retry without a full page reload
+    throw err;
+  }
 }
 
 /** Back-compat alias (some callers still import initDuckDB). */
