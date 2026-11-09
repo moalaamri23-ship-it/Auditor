@@ -338,16 +338,16 @@ export default function SettingsScreen() {
             <p className="mt-1 text-xs text-slate-400 italic">HTTP trigger URL used to send Audit Reports to Work Center owners.</p>
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500 mb-1 block">AI Router URL</label>
+            <label className="text-xs font-semibold text-slate-500 mb-1 block">OXY Connection Flow URL</label>
             <input
               type="password"
               autoComplete="off"
               value={localRouterUrl}
               onChange={e => setLocalRouterUrl(e.target.value)}
-              placeholder="https://prod-xx.westus.logic.azure.com/workflows/..."
+              placeholder="https://..."
               className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
             />
-            <p className="mt-1 text-xs text-slate-400 italic">When set, Copilot AI and report emails go through the AI Router; the URLs above are used when empty.</p>
+            <p className="mt-1 text-xs text-slate-400 italic">One URL for all OXY flows.</p>
           </div>
           <div className="flex justify-end">
             <button

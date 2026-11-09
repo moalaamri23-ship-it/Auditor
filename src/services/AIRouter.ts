@@ -1,7 +1,7 @@
 /**
  * AI Router — single Power Automate entry point for every flow call.
  *
- * When Settings → "AI Router URL" is filled, a flow call is sent to the router
+ * When Settings → "OXY Connection Flow URL" (stored as aiRouterUrl) is filled, a flow call is sent to the router
  * with `task` (and `target` for chat) added to its existing body. The router
  * strips those fields, forwards the body to the target flow and returns that
  * flow's status, content type and body unchanged. When the router URL is empty
