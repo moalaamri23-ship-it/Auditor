@@ -258,6 +258,7 @@ export interface AIConfig {
   modelId: string;
   powerAutomateUrl?: string;
   reportingWebhookUrl?: string;
+  aiRouterUrl?: string;
 }
 
 // ─────────────────────────────────────────────

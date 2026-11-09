@@ -47,6 +47,7 @@ export default function SettingsScreen() {
   const [localEndpoint,          setLocalEndpoint]          = useState('');
   const [localPowerAutomateUrl,  setLocalPowerAutomateUrl]  = useState(aiConfig.powerAutomateUrl ?? '');
   const [localReportingUrl,      setLocalReportingUrl]      = useState(aiConfig.reportingWebhookUrl ?? '');
+  const [localRouterUrl,         setLocalRouterUrl]         = useState(aiConfig.aiRouterUrl ?? '');
 
   const [testStatus,  setTestStatus]  = useState<TestStatus>(null);
   const [testMessage, setTestMessage] = useState('');
@@ -99,7 +100,7 @@ export default function SettingsScreen() {
     setTestMessage('');
 
     if (localProvider === 'copilot') {
-      if (localPowerAutomateUrl.trim()) {
+      if (localPowerAutomateUrl.trim() || aiConfig.aiRouterUrl?.trim()) {
         setTestStatus('ok');
         setTestMessage('Copilot configuration saved.');
       }
@@ -336,9 +337,21 @@ export default function SettingsScreen() {
             />
             <p className="mt-1 text-xs text-slate-400 italic">HTTP trigger URL used to send Audit Reports to Work Center owners.</p>
           </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 mb-1 block">AI Router URL</label>
+            <input
+              type="password"
+              autoComplete="off"
+              value={localRouterUrl}
+              onChange={e => setLocalRouterUrl(e.target.value)}
+              placeholder="https://prod-xx.westus.logic.azure.com/workflows/..."
+              className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
+            />
+            <p className="mt-1 text-xs text-slate-400 italic">When set, Copilot AI and report emails go through the AI Router; the URLs above are used when empty.</p>
+          </div>
           <div className="flex justify-end">
             <button
-              onClick={() => updateAIConfig({ reportingWebhookUrl: localReportingUrl })}
+              onClick={() => updateAIConfig({ reportingWebhookUrl: localReportingUrl, aiRouterUrl: localRouterUrl.trim() })}
               className="bg-brand-600 text-white px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-brand-700 transition"
             >
               <Icon name="save" className="w-4 h-4" /> Save

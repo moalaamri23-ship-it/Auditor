@@ -7,6 +7,7 @@
  */
 
 import type { AIProvider } from '../types';
+import { routeFlowCall, isRouterConfigured } from './AIRouter';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Model resolution
@@ -37,7 +38,7 @@ export async function testApiConnection(
   powerAutomateUrl = '',
 ): Promise<{ ok: boolean; message: string }> {
   if (provider === 'copilot') {
-    if (!powerAutomateUrl.trim()) return { ok: false, message: 'Power Automate URL is required.' };
+    if (!powerAutomateUrl.trim() && !isRouterConfigured()) return { ok: false, message: 'Power Automate URL is required.' };
     return { ok: true, message: 'Copilot configured via Power Automate.' };
   }
 
@@ -238,18 +239,20 @@ async function _callPowerAutomate(
   messages: AIMessage[],
   systemPrompt?: string,
 ): Promise<string> {
-  if (!url) throw new Error('Power Automate URL is required for Copilot provider.');
   const parts: string[] = [];
   if (systemPrompt) parts.push(systemPrompt);
   for (const m of messages.filter(msg => msg.role !== 'system')) parts.push(m.content);
-  const res = await fetch(url, {
+  // Stateless gateway call (fresh sessionId each time) → router task "chat", target "agent".
+  const routed = routeFlowCall(url, 'chat', {
+    sessionId: crypto.randomUUID(),
+    prompt: parts.join('\n\n'),
+    responseFormat: 'text',
+  }, 'agent');
+  if (!routed.url) throw new Error('Power Automate URL is required for Copilot provider.');
+  const res = await fetch(routed.url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: crypto.randomUUID(),
-      prompt: parts.join('\n\n'),
-      responseFormat: 'text',
-    }),
+    body: JSON.stringify(routed.body),
   });
   if (!res.ok) {
     const errText = await res.text();
