@@ -273,8 +273,6 @@ async function _processBatch(records: WORecord[], aiConfig: AIConfig): Promise<A
     aiConfig.modelId,
     [{ role: 'user', content: userPrompt }],
     SYSTEM_PROMPT,
-    '',
-    aiConfig.powerAutomateUrl ?? '',
   );
 
   const parsed = _parseJsonArray(raw);

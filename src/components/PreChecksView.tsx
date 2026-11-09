@@ -83,8 +83,9 @@ export default function PreChecksView() {
   };
 
   const aiKeyConfigured =
-    !!aiConfig?.apiKey?.trim() ||
-    aiConfig?.provider === 'copilot';
+    aiConfig?.provider === 'copilot'
+      ? !!aiConfig?.aiRouterUrl?.trim()
+      : !!aiConfig?.apiKey?.trim();
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">

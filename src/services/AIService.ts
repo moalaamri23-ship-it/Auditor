@@ -35,11 +35,10 @@ export async function testApiConnection(
   apiKey: string,
   modelId: string,
   azureEndpoint = '',
-  powerAutomateUrl = '',
 ): Promise<{ ok: boolean; message: string }> {
   if (provider === 'copilot') {
-    if (!powerAutomateUrl.trim() && !isRouterConfigured()) return { ok: false, message: 'Power Automate URL is required.' };
-    return { ok: true, message: 'Copilot configured via Power Automate.' };
+    if (!isRouterConfigured()) return { ok: false, message: 'OXY Connection Flow URL is required.' };
+    return { ok: true, message: 'Copilot configured via OXY Connection Flow.' };
   }
 
   if (!apiKey.trim()) return { ok: false, message: 'No API key provided.' };
@@ -148,10 +147,9 @@ export async function callAI(
   messages: AIMessage[],
   systemPrompt?: string,
   azureEndpoint = '',
-  powerAutomateUrl = '',
 ): Promise<string> {
   if (provider === 'copilot') {
-    return _callPowerAutomate(powerAutomateUrl, messages, systemPrompt);
+    return _callPowerAutomate(messages, systemPrompt);
   }
 
   const model = resolveModel(provider, modelId);
@@ -235,7 +233,6 @@ export async function callAI(
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function _callPowerAutomate(
-  url: string,
   messages: AIMessage[],
   systemPrompt?: string,
 ): Promise<string> {
@@ -243,12 +240,12 @@ async function _callPowerAutomate(
   if (systemPrompt) parts.push(systemPrompt);
   for (const m of messages.filter(msg => msg.role !== 'system')) parts.push(m.content);
   // Stateless gateway call (fresh sessionId each time) → router task "chat", target "agent".
-  const routed = routeFlowCall(url, 'chat', {
+  const routed = routeFlowCall('chat', {
     sessionId: crypto.randomUUID(),
     prompt: parts.join('\n\n'),
     responseFormat: 'text',
   }, 'agent');
-  if (!routed.url) throw new Error('Power Automate URL is required for Copilot provider.');
+  if (!routed.url) throw new Error('OXY Connection Flow URL is required for Copilot provider. Set it in Settings.');
   const res = await fetch(routed.url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

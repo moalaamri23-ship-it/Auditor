@@ -45,8 +45,6 @@ export default function SettingsScreen() {
   const [localKey,       setLocalKey]       = useState(aiConfig.apiKey);
   const [localModelId,   setLocalModelId]   = useState(aiConfig.modelId);
   const [localEndpoint,          setLocalEndpoint]          = useState('');
-  const [localPowerAutomateUrl,  setLocalPowerAutomateUrl]  = useState(aiConfig.powerAutomateUrl ?? '');
-  const [localReportingUrl,      setLocalReportingUrl]      = useState(aiConfig.reportingWebhookUrl ?? '');
   const [localRouterUrl,         setLocalRouterUrl]         = useState(aiConfig.aiRouterUrl ?? '');
 
   const [testStatus,  setTestStatus]  = useState<TestStatus>(null);
@@ -95,14 +93,17 @@ export default function SettingsScreen() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateAIConfig({ provider: localProvider, apiKey: localKey, modelId: localModelId, powerAutomateUrl: localPowerAutomateUrl });
+    updateAIConfig({ provider: localProvider, apiKey: localKey, modelId: localModelId });
     setTestStatus(null);
     setTestMessage('');
 
     if (localProvider === 'copilot') {
-      if (localPowerAutomateUrl.trim() || aiConfig.aiRouterUrl?.trim()) {
+      if (aiConfig.aiRouterUrl?.trim()) {
         setTestStatus('ok');
         setTestMessage('Copilot configuration saved.');
+      } else {
+        setTestStatus('error');
+        setTestMessage('Set the OXY Connection Flow URL below to use Copilot.');
       }
       return;
     }
@@ -211,23 +212,12 @@ export default function SettingsScreen() {
             </div>
           )}
 
-          {/* Copilot — Power Automate URL instead of model selector */}
+          {/* Copilot — no model selector; calls go through the OXY Connection Flow URL */}
           {localProvider === 'copilot' && (
             <div className="animate-enter space-y-3">
               <p className="text-xs text-slate-400">
                 Model selection is managed by Copilot Studio. No model ID is required here.
               </p>
-              <div>
-                <label className="text-xs font-semibold text-slate-500 mb-1 block">Copilot Power Automate URL</label>
-                <input
-                  type="url"
-                  value={localPowerAutomateUrl}
-                  onChange={e => { setLocalPowerAutomateUrl(e.target.value); setTestStatus(null); }}
-                  placeholder="https://prod-xx.westus.logic.azure.com/workflows/..."
-                  className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
-                />
-                <p className="mt-1 text-xs text-slate-400 italic">HTTP trigger URL that routes prompts to your Copilot Studio agent.</p>
-              </div>
             </div>
           )}
 
@@ -327,17 +317,6 @@ export default function SettingsScreen() {
         </div>
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-semibold text-slate-500 mb-1 block">Power Automate HTTP URL</label>
-            <input
-              type="url"
-              value={localReportingUrl}
-              onChange={e => setLocalReportingUrl(e.target.value)}
-              placeholder="https://prod-xx.westus.logic.azure.com/workflows/..."
-              className="w-full border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500 transition shadow-sm font-mono"
-            />
-            <p className="mt-1 text-xs text-slate-400 italic">HTTP trigger URL used to send Audit Reports to Work Center owners.</p>
-          </div>
-          <div>
             <label className="text-xs font-semibold text-slate-500 mb-1 block">OXY Connection Flow URL</label>
             <input
               type="password"
@@ -351,7 +330,7 @@ export default function SettingsScreen() {
           </div>
           <div className="flex justify-end">
             <button
-              onClick={() => updateAIConfig({ reportingWebhookUrl: localReportingUrl, aiRouterUrl: localRouterUrl.trim() })}
+              onClick={() => updateAIConfig({ aiRouterUrl: localRouterUrl.trim() })}
               className="bg-brand-600 text-white px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-brand-700 transition"
             >
               <Icon name="save" className="w-4 h-4" /> Save

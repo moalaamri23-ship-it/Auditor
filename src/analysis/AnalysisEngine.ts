@@ -60,7 +60,7 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineOut
   const aiEnabled =
     !ruleChecksOnly &&
     aiConfig &&
-    (aiConfig.apiKey?.trim() || aiConfig.provider === 'copilot') &&
+    (aiConfig.provider === 'copilot' ? !!aiConfig.aiRouterUrl?.trim() : aiConfig.apiKey?.trim()) &&
     scopeWOCount > 0;
 
   if (aiEnabled) {

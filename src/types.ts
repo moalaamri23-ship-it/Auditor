@@ -256,8 +256,6 @@ export interface AIConfig {
   provider: AIProvider;
   apiKey: string;
   modelId: string;
-  powerAutomateUrl?: string;
-  reportingWebhookUrl?: string;
   aiRouterUrl?: string;
 }
 

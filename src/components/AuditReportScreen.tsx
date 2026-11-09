@@ -948,8 +948,8 @@ export default function AuditReportScreen() {
   };
 
   const sendEmail = async (wc: WorkCenterAuditData) => {
-    if (!aiConfig.reportingWebhookUrl && !aiConfig.aiRouterUrl?.trim()) {
-      alert('Please configure Reporting Integration URL in Settings first.');
+    if (!aiConfig.aiRouterUrl?.trim()) {
+      alert('Please configure the OXY Connection Flow URL in Settings first.');
       return;
     }
     const emailTo = reportingEmails[wc.workCenter];
@@ -957,7 +957,7 @@ export default function AuditReportScreen() {
 
     setSendingStatus(prev => ({ ...prev, [wc.workCenter]: 'sending' }));
     try {
-      const routed = routeFlowCall(aiConfig.reportingWebhookUrl, 'audit_report', {
+      const routed = routeFlowCall('audit_report', {
           emailTo,
           subject: `Reliability Audit Report — ${wc.description || wc.workCenter}`,
           emailBody: `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc"><tr><td align="center" valign="top" style="padding:32px 16px"><table cellpadding="0" cellspacing="0" border="0" align="center" style="max-width:680px;width:100%"><tr><td align="left" valign="top"><pre style="font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.7;color:#1e293b;white-space:pre-wrap;background:none;border:none;padding:0;margin:0">${renderTemplateHTML(getEmailText(wc))}</pre></td></tr></table></td></tr></table>`,
@@ -1050,7 +1050,7 @@ export default function AuditReportScreen() {
             </div>
             <button
               onClick={sendBulk}
-              disabled={selectedWCs.size === 0 || (!aiConfig.reportingWebhookUrl && !aiConfig.aiRouterUrl?.trim())}
+              disabled={selectedWCs.size === 0 || !aiConfig.aiRouterUrl?.trim()}
               className="px-4 py-1.5 text-sm bg-brand-600 text-white rounded font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center gap-2"
             >
               <Icon name="send" className="w-4 h-4" />
