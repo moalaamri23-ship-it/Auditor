@@ -156,7 +156,8 @@ src/
     ├── ReportingSettingsScreen.tsx # Per-work-center email address assignment; queries
     │                             #   v_wo_primary for WC list, stores in reportingEmails
     └── SettingsScreen.tsx        # AI provider/model/key config with live model fetching +
-                                  #   OXY Connection Flow URL (aiRouterUrl, the only flow URL)
+                                  #   "OXY Connection Flow" card (aiRouterUrl, the only flow URL);
+                                  #   AI provider card is dev-only (hidden in production)
 ```
 
 ### Project & Run Lifecycle
@@ -306,7 +307,9 @@ Every Power Automate call goes through ONE URL: Settings → "OXY Connection Flo
 | Copilot provider AI (`AIService._callPowerAutomate`) | `chat`, `target: "agent"` | Stateless gateway: `{sessionId (random), prompt, responseFormat: "text"}`, returns raw text |
 | Work-center report email (`AuditReportScreen.sendEmail`) | `audit_report` | Body below |
 
-Copilot AI analysis and report sending are disabled until the OXY Connection Flow URL is set. The URL is a secret: never log or commit it.
+Copilot AI analysis and report sending are disabled until the OXY Connection Flow URL is set.
+
+**Production build:** the AI Provider Configuration card is hidden (dev only) and `aiConfig.provider` is forced to `copilot` on load, so AI always goes through the OXY Connection Flow. Settings shows the "OXY Connection Flow" card (the URL field) and the Failure Catalog card. The URL is a secret: never log or commit it.
 
 ### Power Automate Reporting
 

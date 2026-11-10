@@ -21,9 +21,10 @@ export const useStore = create<AppState>()(
       activeProjectId: null,
       activeRunId: null,
       aiConfig: {
-        provider: 'gemini',
+        // Production uses Copilot through the OXY Connection Flow only.
+        provider: import.meta.env.PROD ? 'copilot' : 'gemini',
         apiKey: '',
-        modelId: 'gemini-2.0-flash',
+        modelId: import.meta.env.PROD ? '' : 'gemini-2.0-flash',
         aiRouterUrl: '',
       },
       reportingEmails: {},
@@ -237,6 +238,11 @@ export const useStore = create<AppState>()(
       // library is empty AND the legacy field is set.
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        // Production hides AI provider settings: AI always goes through Copilot
+        // via the OXY Connection Flow URL, whatever provider was stored before.
+        if (import.meta.env.PROD && state.aiConfig) {
+          state.aiConfig = { ...state.aiConfig, provider: 'copilot' };
+        }
         // DuckDB is in-memory and cleared on every page load — always start with false
         // so charts fall back to chartCache and useRunAutoRestore can rebuild from IndexedDB
         if (Array.isArray(state.runs)) {

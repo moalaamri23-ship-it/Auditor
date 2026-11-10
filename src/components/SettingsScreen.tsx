@@ -12,11 +12,10 @@ import type { FailureCatalog } from '../types';
 
 type ProviderKey = keyof typeof AI_PROVIDERS;
 
-// In the deployed (production) build, only Copilot and OpenRouter are exposed.
-// The full provider list is available in local dev only.
-const DEPLOYED_PROVIDERS: ProviderKey[] = ['copilot', 'openrouter'];
-const PROVIDER_KEYS = (Object.keys(AI_PROVIDERS) as ProviderKey[])
-  .filter((p) => !import.meta.env.PROD || DEPLOYED_PROVIDERS.includes(p));
+// The AI provider card is local-dev only. In the deployed (production) build AI
+// always runs through Copilot via the OXY Connection Flow URL.
+const SHOW_AI_PROVIDERS = !import.meta.env.PROD;
+const PROVIDER_KEYS = Object.keys(AI_PROVIDERS) as ProviderKey[];
 
 // Static fallback lists — used when live fetch hasn't run yet or provider is Azure/OpenRouter/Copilot
 const FALLBACK_MODELS: Record<ProviderKey, string[]> = {
@@ -39,7 +38,6 @@ export default function SettingsScreen() {
 
   const [localProvider,  setLocalProvider]  = useState<ProviderKey>(() => {
     const p = aiConfig.provider as ProviderKey;
-    // In deployed build, fall back to a listed provider if the stored one is hidden.
     return PROVIDER_KEYS.includes(p) ? p : PROVIDER_KEYS[0];
   });
   const [localKey,       setLocalKey]       = useState(aiConfig.apiKey);
@@ -123,9 +121,10 @@ export default function SettingsScreen() {
     <div className="max-w-7xl mx-auto p-10 animate-enter">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900">Settings</h1>
-        <p className="text-sm text-slate-700 mt-2">Configure your AI provider and application preferences.</p>
+        <p className="text-sm text-slate-700 mt-2">{SHOW_AI_PROVIDERS ? 'Configure your AI provider and application preferences.' : 'Configure your connection and application preferences.'}</p>
       </div>
 
+      {SHOW_AI_PROVIDERS && (
       <div className="bg-white p-6 rounded border max-w-xl">
         <div className="border-b pb-4 mb-6 flex items-center gap-3">
           <div className="bg-brand-600 p-2 rounded text-white flex items-center justify-center">
@@ -303,16 +302,17 @@ export default function SettingsScreen() {
           </div>
         </form>
       </div>
+      )}
 
-      {/* Reporting Integration Section */}
-      <div className="bg-white p-6 rounded border max-w-xl mt-6">
+      {/* OXY Connection Flow Section */}
+      <div className={`bg-white p-6 rounded border max-w-xl${SHOW_AI_PROVIDERS ? ' mt-6' : ''}`}>
         <div className="border-b pb-4 mb-6 flex items-center gap-3">
           <div className="bg-blue-600 p-2 rounded text-white flex items-center justify-center">
-            <Icon name="mail" className="w-5 h-5" />
+            <Icon name="zap" className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold mb-1">Reporting Integration</h2>
-            <p className="text-xs text-slate-400">Configure Power Automate to send email reports.</p>
+            <h2 className="text-lg font-semibold mb-1">OXY Connection Flow</h2>
+            <p className="text-xs text-slate-400">Power Automate connection for AI and email reports.</p>
           </div>
         </div>
         <div className="space-y-4">
