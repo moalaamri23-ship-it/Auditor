@@ -95,7 +95,7 @@ src/
 │   └── useStore.ts               # Zustand store: projects[], runs[], activeProjectId,
 │                                 #   activeRunId, aiConfig, currentScreen, reportingEmails
 │                                 #   aiConfig shape: { provider, apiKey, modelId,
-│                                 #     reportingWebhookUrl, powerAutomateUrl }
+│                                 #     aiRouterUrl }  (aiRouterUrl = OXY Connection Flow URL)
 │                                 #   reportingEmails: Record<workCenter, emailAddress>
 ├── hooks/
 │   └── useRunAutoRestore.ts      # Restores DuckDB data for a run on mount if hasDataInDB=false;
@@ -110,6 +110,7 @@ src/
 │   │                             #   getLiveScopeCount(), createAnalysisScopeView(),
 │   │                             #   ai_flags table management
 │   ├── AIService.ts              # Provider-agnostic AI calls, fetchModels(), TieredModels
+│   ├── AIRouter.ts               # routeFlowCall(task, body, target?) → OXY Connection Flow URL
 │   ├── IndexedDBService.ts       # IndexedDB persistence layer for large run data
 │   └── FailureCatalogService.ts  # Loads bundled/user failure catalog into DuckDB
 ├── analysis/
@@ -154,8 +155,8 @@ src/
     ├── AuditReportScreen.tsx     # Power Automate report distribution (see Reporting section)
     ├── ReportingSettingsScreen.tsx # Per-work-center email address assignment; queries
     │                             #   v_wo_primary for WC list, stores in reportingEmails
-    └── SettingsScreen.tsx        # AI provider/model/key config + reportingWebhookUrl +
-                                  #   powerAutomateUrl (Copilot) with live model fetching
+    └── SettingsScreen.tsx        # AI provider/model/key config with live model fetching +
+                                  #   OXY Connection Flow URL (aiRouterUrl, the only flow URL)
 ```
 
 ### Project & Run Lifecycle
@@ -296,11 +297,22 @@ When `run.hasDataInDB` is false (cold reload), `AuditDashboard` restores charts 
 - Custom `<Icon>` component — no third-party icon lib; available icons listed in `IconName` type in `Icon.tsx` (includes `copy`, `check`, `chevronDown/Up/Right/Left`, etc.)
 - `animate-enter`, `scroll-thin` CSS classes defined in `index.html`
 
+### OXY Connection Flow (AI Router)
+
+Every Power Automate call goes through ONE URL: Settings → "OXY Connection Flow URL" (stored as `aiConfig.aiRouterUrl`; contract in `~/Downloads/Projects/ai-router/README.md`). There are no per-flow URL settings and no direct-URL fallback. `src/services/AIRouter.ts` `routeFlowCall(task, body, target?)` adds `task` (and `target`) to the call's existing body.
+
+| Call | Task | Notes |
+|---|---|---|
+| Copilot provider AI (`AIService._callPowerAutomate`) | `chat`, `target: "agent"` | Stateless gateway: `{sessionId (random), prompt, responseFormat: "text"}`, returns raw text |
+| Work-center report email (`AuditReportScreen.sendEmail`) | `audit_report` | Body below |
+
+Copilot AI analysis and report sending are disabled until the OXY Connection Flow URL is set. The URL is a secret: never log or commit it.
+
 ### Power Automate Reporting
 
-`AuditReportScreen.tsx` drives a one-click email distribution flow per work center. It queries DuckDB for the WC list (with WO numbers via `STRING_AGG`), cross-references in-memory `run.aiFlags` and `run.ruleChecks.flaggedWOs` to compute per-WC flag distributions, then fires an HTTP POST to the configured Power Automate webhook URL.
+`AuditReportScreen.tsx` drives a one-click email distribution flow per work center. It queries DuckDB for the WC list (with WO numbers via `STRING_AGG`), cross-references in-memory `run.aiFlags` and `run.ruleChecks.flaggedWOs` to compute per-WC flag distributions, then fires an HTTP POST to the OXY Connection Flow URL with `task: "audit_report"`.
 
-**HTTP payload** (single JSON body, all values are strings):
+**HTTP payload** (single JSON body, all values are strings; `task` is added by `routeFlowCall` and stripped by the router):
 ```json
 {
   "emailTo": "owner@example.com",
